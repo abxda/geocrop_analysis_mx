@@ -31,27 +31,50 @@ def run_gdal_merge(input_tile_pattern, output_image_path):
         os.remove(tile_file)
     _log("Cleaned up temporary tiles.")
 
+import pandas as pd
+
+def _generate_monthly_ranges(start_date, end_date):
+    """Generates a list of month start/end date tuples from a period."""
+    months = pd.date_range(start=start_date, end=end_date, freq='MS')
+    date_ranges = []
+    for month_start in months:
+        month_end = month_start + pd.offsets.MonthEnd(1)
+        date_ranges.append(
+            (month_start.strftime('%Y-%m-%d'), month_end.strftime('%Y-%m-%d'))
+        )
+    return date_ranges
+
 def run_download_phase(config, study_area):
     """Runs the full data download and preprocessing phase."""
+    # Determine date ranges
+    study_period = config['study_period']
+    monthly_ranges = _generate_monthly_ranges(study_period['start_date'], study_period['end_date'])
+    
+    if config['segmentation_composite_uses_full_study_period']:
+        seg_start = study_period['start_date']
+        seg_end = study_period['end_date']
+    else:
+        seg_start = config['segmentation_composite_custom_range']['start_date']
+        seg_end = config['segmentation_composite_custom_range']['end_date']
+
     # Download main segmentation composite
-    seg_config = config['segmentation_composite']
     seg_output_dir = os.path.join(config['output_dir'], config['aoi_name'], 'segmentation')
     main_composite_path = os.path.join(seg_output_dir, config['output_names']['segmentation_image'])
     
     if not os.path.exists(main_composite_path):
-        _log("Downloading main segmentation composite...")
-        hls_collection = multispectral.get_hls_collection(seg_config['start_date'], seg_config['end_date'], study_area)
+        _log(f"Downloading main segmentation composite for period {seg_start} to {seg_end}...")
+        hls_collection = multispectral.get_hls_collection(seg_start, seg_end, study_area)
         main_composite = multispectral.get_geometric_median(hls_collection)
         multispectral.download_composite(main_composite, study_area, main_composite_path)
         run_gdal_merge(os.path.join(seg_output_dir, 'tile_*.tif'), main_composite_path)
     else:
         _log(f"Main composite already exists: {os.path.basename(main_composite_path)}")
     
-    # Download monthly radar composites
+    # Pass the generated monthly ranges to the download functions
+    config['date_ranges'] = monthly_ranges
     radar.download_radar_composites(config, study_area)
     # Here you would add the call to download monthly multispectral and merge them as well
     _log("Download phase complete.")
-    return main_composite_path
 
 import shutil
 

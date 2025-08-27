@@ -1,115 +1,112 @@
 # GeoCrop Analysis MX
 
-This project provides a complete pipeline for crop classification using multispectral (Landsat, Sentinel-2) and radar (Sentinel-1) satellite imagery from Google Earth Engine. It is designed to be modular, configurable, and extensible.
+This project provides a complete, modular pipeline for crop classification using satellite imagery from Google Earth Engine. It is designed to be configurable, extensible, and easy to use for different regions and time periods.
 
-## Workflow Overview
+## Features
 
-The pipeline executes the following major steps:
+- **Modular Structure**: The code is organized into logical modules for data downloading, processing, and feature extraction.
+- **Fully Configurable**: All parameters, paths, and settings are controlled via a central `config.yaml` file. No code changes are needed to run a new analysis.
+- **Automated GEE Downloads**: Downloads and preprocesses multispectral (HLS: Landsat/Sentinel-2) and radar (Sentinel-1) data from Google Earth Engine.
+- **Advanced Image Processing**: Performs image segmentation using `rsgislib` to create meaningful objects for analysis.
+- **Built-in Test Mode**: Includes a sample dataset and a dedicated test configuration to verify the pipeline and demonstrate its functionality.
+- **Flexible Execution**: The pipeline can be run end-to-end or in specific phases (`download`, `segment`, `label`, `extract`) for easier debugging and testing.
 
-1.  **Download**: Downloads all required satellite imagery (monthly composites and a main segmentation composite) from Google Earth Engine.
-2.  **Segment**: Divides the main composite image into meaningful segments (polygons) using the Shepherd segmentation algorithm.
-3.  **Label**: Assigns a class to each segment based on your ground-truth data and populates the necessary attribute tables.
-4.  **Extract**: For every segment, it calculates a rich set of statistical features from all the downloaded images and exports the final dataset to a CSV file, ready for machine learning.
+## Installation
 
-## Project Structure
+This project relies on a specific set of geospatial libraries. Using **Conda** is required. We recommend **Miniforge** as it is a minimal, conda-forge-first installer that is ideal for scientific packages.
 
-The project uses a clean directory structure that separates source code from data and outputs.
+1.  **Install Miniforge**: Download and install the [Miniforge installer](https://github.com/conda-forge/miniforge/releases) for your operating system.
 
-```
-working_directory/
-├── geocrop_analysis_mx/  <-- Project folder (This is the Git repository)
-│   ├── src/                # All Python source code
-│   ├── environment.yml     # Conda environment definition
-│   ├── config.yaml         # Pipeline configuration file
-│   └── README.md           # This file
-│
-├── data/                   <-- Input data (Place this folder next to the project folder)
-│
-└── outputs/                <-- Generated results (Place this folder next to the project folder)
-```
+2.  **Open the Miniforge Prompt**: Open the "Miniforge Prompt" (on Windows) or your terminal (on macOS/Linux).
 
-## Installation (Step-by-Step)
-
-This project relies on a specific set of geospatial libraries. Using Conda is **required**. We recommend **Miniforge** as it is a minimal, conda-forge-first installer that works very well for scientific packages.
-
-**1. Install Miniforge**
-
--   Go to the [Miniforge GitHub releases page](https://github.com/conda-forge/miniforge/releases).
--   Download the installer appropriate for your operating system (e.g., `Miniforge3-Windows-x86_64.exe`).
--   Run the installer. It is recommended to accept the defaults and allow the installer to add Conda to your PATH if prompted.
-
-**2. Open the Miniforge Prompt**
-
--   After installation, open the "Miniforge Prompt" from your Start Menu (on Windows) or your terminal (on macOS/Linux).
-
-**3. Clone the Project**
-
--   Navigate to your desired working directory and clone this repository.
+3.  **Clone the Project**: Navigate to your working directory and clone the repository.
     ```bash
     git clone https://github.com/abxda/geocrop_analysis_mx.git
     ```
 
-**4. Create Project Directories**
-
--   Navigate *outside* the `geocrop_analysis_mx` folder and create the `data` and `outputs` directories.
+4.  **Create Project Directories**: Navigate *outside* the `geocrop_analysis_mx` folder and create the `data` and `outputs` directories. The project expects this structure.
     ```bash
-    # From your working_directory
+    # From your main working directory
     mkdir data
     mkdir outputs
     ```
--   Place your AOI data (e.g., the `AOI_Chihuahua_2023` folder) inside the `data` directory.
 
-**5. Create and Activate the Conda Environment**
-
--   Navigate into the project folder (`cd geocrop_analysis_mx`).
--   Run the following command to create the environment from the provided file. This will take several minutes.
+5.  **Create and Activate Conda Environment**: Navigate into the project folder (`cd geocrop_analysis_mx`) and run the following commands:
     ```bash
+    # This creates the environment from the file and may take several minutes
     conda env create -f environment.yml
-    ```
--   Activate the new environment. You must do this every time you want to run the code.
-    ```bash
+
+    # Activate the environment (must be done every time you use the project)
     conda activate geocrop_analysis_mx
     ```
 
-**6. Authenticate Google Earth Engine**
-
--   If you have never used GEE on your machine before, run the authentication command and follow the prompts in your web browser.
+6.  **Authenticate Google Earth Engine**: If this is your first time using GEE, authenticate your machine.
     ```bash
     earthengine authenticate
     ```
 
-## Configuration
+## Preparing Your Own Data
 
-The entire pipeline is controlled by the `config.yaml` file. Modify this file to change the Area of Interest (AOI), date ranges, or algorithm parameters before running the pipeline.
+To run the pipeline on your own data, place your files in a dedicated folder inside the main `data/` directory (e.g., `data/My_Region/`). Your data must meet the following requirements:
+
+-   **Area of Interest (AOI) File**:
+    -   **Format**: GeoPackage (`.gpkg`) or ESRI Shapefile (`.shp`).
+    -   **Content**: Must contain a **single polygon** defining the boundary of your study area.
+    -   **CRS**: Must be in a geographic coordinate system, preferably `EPSG:4326` (WGS 84).
+
+-   **Labels File**:
+    -   **Format**: GeoPackage (`.gpkg`) or ESRI Shapefile (`.shp`).
+    -   **Content**: Must contain points or polygons representing ground truth samples.
+    -   **CRS**: Must match the CRS of your AOI file.
+    -   **Required Field**: Must contain a column with the class names (e.g., "wheat", "corn"). You will specify the name of this column in the `config.yaml` file.
+
+## Configuration (`config.yaml`)
+
+This is the main control file for the pipeline. To run your own analysis, create a copy (e.g., `config.my_region.yaml`) and edit it:
+
+-   `aoi_name`: The name of your AOI. **Must match the folder name** you created in `data/`.
+-   `aoi_file`: The filename of your AOI boundary file (e.g., `my_region_boundary.gpkg`).
+-   `labels_file`: The filename of your ground truth labels file.
+-   `labels_field_name`: The **exact name** of the column in your labels file that contains the crop names.
+-   `study_period`: Set the `start_date` and `end_date` for your analysis. The pipeline will automatically generate monthly composites for this period.
+-   `segmentation_composite_*`: Configure the date range for the main image used for segmentation. It can use the full study period or a custom range.
+-   `segmentation_params`: Fine-tune the `rsgislib` segmentation algorithm.
 
 ## Usage
 
-Ensure your Conda environment is activated. All commands should be run from the root of the `geocrop_analysis_mx` directory.
+Ensure your Conda environment is activated and you are in the `geocrop_analysis_mx` directory.
 
-**Full Run**
+### 1. Running the Included Test Case
 
-To execute the entire pipeline from start to finish, run:
+To verify your installation and see how the pipeline works, you can use the included test data.
+
+-   **Step 1: Set up the test data.** This command copies the sample files to the `data/` directory.
+    ```bash
+    python src/main.py --phase setup_test
+    ```
+
+-   **Step 2: Run the pipeline with the test configuration.** This runs the full process on the small test dataset.
+    ```bash
+    python src/main.py --config config.test.yaml --phase full_run
+    ```
+
+### 2. Running on Your Own Data
+
+-   **Step 1**: Prepare your data and place it in the `data/` directory as described above.
+-   **Step 2**: Create and configure your custom config file (e.g., `config.my_region.yaml`).
+-   **Step 3**: Run the pipeline, pointing to your new configuration file.
+    ```bash
+    python src/main.py --config config.my_region.yaml
+    ```
+
+### 3. Running Individual Phases
+
+You can run a single part of the pipeline using the `--phase` argument. This is useful for debugging or re-running a failed step. Remember to include your `--config` file if you are not using the default.
 
 ```bash
-python src/main.py
+# Only run the data download phase for the test case
+python src/main.py --config config.test.yaml --phase download
+
+# Only run the segmentation phase for the test case
+python src/main.py --config config.test.yaml --phase segment
 ```
-
-**Running a Specific Phase**
-
-You can run a single part of the pipeline using the `--phase` argument. This is useful for debugging or re-running a failed step.
-
-```bash
-# Only run the data download phase
-python src/main.py --phase download
-
-# Only run the segmentation phase
-python src/main.py --phase segment
-
-# Only run the labeling phase
-python src/main.py --phase label
-
-# Only run the feature extraction phase
-python src/main.py --phase extract
-```
-
-The script will print timestamped messages indicating the start and end of each phase and the total duration.
