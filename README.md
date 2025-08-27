@@ -35,7 +35,13 @@ Using **Conda** is required. We recommend **Miniforge** as it is a minimal, cond
     conda activate geocrop_analysis_mx
     ```
 
-7.  **Authenticate Google Earth Engine**: Run `earthengine authenticate` if it's your first time.
+7.  **Validate the Environment**: Before running the main pipeline, verify that all critical libraries were installed correctly.
+    ```bash
+    python check_env.py
+    ```
+    *You should see `[SUCCESS]` messages for all libraries. If you see any `[FAILURE]` messages, your environment may not have been created correctly. Try deleting it (`conda env remove -n geocrop_analysis_mx`) and creating it again.*
+
+8.  **Authenticate Google Earth Engine**: Run `earthengine authenticate` if it's your first time.
 
 ## Preparing Your Own Data
 
