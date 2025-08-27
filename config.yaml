@@ -1,7 +1,9 @@
 # -----------------------------------------------------------------------------
 # General Configuration
 # -----------------------------------------------------------------------------
-aoi_name: "AOI_Chihuahua_2023"
+# General Configuration
+# -----------------------------------------------------------------------------
+# The output directory for this run will be named after the AOI file below (e.g., aoi_file.shp -> outputs/aoi_file/)
 data_dir: "../data"
 output_dir: "../outputs"
 
