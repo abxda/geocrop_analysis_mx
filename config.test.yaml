@@ -1,0 +1,38 @@
+# -----------------------------------------------------------------------------
+# TEST Configuration for the Yaqui Valley Example
+# -----------------------------------------------------------------------------
+# This file is configured to run the pipeline on the small test dataset.
+# Use it by running: python src/main.py --config config.test.yaml
+# -----------------------------------------------------------------------------
+
+aoi_name: "AOI_Yaqui_Test"
+
+data_dir: "../data"
+output_dir: "../outputs"
+
+aoi_file: "aoi_yaqui_test.gpkg"
+labels_file: "crop_labels_yaqui_test.gpkg"
+labels_field_name: "crop_name"
+
+# Using a shorter date range for testing purposes
+date_ranges:
+  - ["2023-05-01", "2023-05-31"]
+  - ["2023-06-01", "2023-06-30"]
+
+segmentation_composite:
+  start_date: "2023-05-01"
+  end_date: "2023-06-30"
+
+segmentation_params:
+  num_clusters: 40 # Reduced for faster testing
+  min_n_pxls: 50
+  dist_thres: 100.0
+  bands: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+
+output_names:
+  segmentation_image: "GM_Seg_Composite_Test.tif"
+  segmented_clumps: "segmented_clumps_test.kea"
+  segmented_polygons: "segmented_polygons_test.shp"
+  labeled_polygons: "labeled_polygons_test.shp"
+  rasterized_labels: "rasterized_labels_test.tif"
+  features_csv: "features_test.csv"

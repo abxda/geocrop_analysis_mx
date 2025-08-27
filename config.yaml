@@ -21,6 +21,9 @@ aoi_file: "AOI_Chihuahua.gpkg"
 # Path will be constructed as: {data_dir}/{aoi_name}/labels/{labels_file}
 labels_file: "etiquetas_chihuahua.gpkg"
 
+# Name of the column in the labels file that contains the class name.
+labels_field_name: "klass"
+
 # Date ranges for monthly composite downloads.
 # Format: [start_date, end_date]
 date_ranges:

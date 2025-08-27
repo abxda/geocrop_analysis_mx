@@ -53,22 +53,60 @@ def run_download_phase(config, study_area):
     _log("Download phase complete.")
     return main_composite_path
 
+import shutil
+
+def run_setup_test_phase(config):
+    """Copies test data into the correct data directory structure."""
+    _log("Setting up test environment...")
+    source_dir = os.path.join(os.path.dirname(__file__), '..', 'test_data')
+    dest_aoi_dir = os.path.join(config['data_dir'], config['aoi_name'])
+    dest_labels_dir = os.path.join(dest_aoi_dir, 'labels')
+
+    os.makedirs(dest_labels_dir, exist_ok=True)
+
+    # Define source and destination paths
+    source_aoi_path = os.path.join(source_dir, config['aoi_file'])
+    dest_aoi_path = os.path.join(dest_aoi_dir, config['aoi_file'])
+    source_labels_path = os.path.join(source_dir, config['labels_file'])
+    dest_labels_path = os.path.join(dest_labels_dir, config['labels_file'])
+
+    # Copy files
+    _log(f"Copying {config['aoi_file']} to {dest_aoi_path}")
+    shutil.copy(source_aoi_path, dest_aoi_path)
+    _log(f"Copying {config['labels_file']} to {dest_labels_path}")
+    shutil.copy(source_labels_path, dest_labels_path)
+
+    _log("Test data setup complete.")
+    _log(f"You can now run the pipeline for the test case with:")
+    _log(f"python src/main.py --config config.test.yaml")
+
 def main():
     """Main orchestrator for the geocrop analysis pipeline."""
     parser = argparse.ArgumentParser(description="GeoCrop Analysis Pipeline")
     parser.add_argument(
+        '--config',
+        default='config.yaml',
+        help='Path to the configuration file (e.g., config.test.yaml)'
+    )
+    parser.add_argument(
         '--phase',
-        choices=['download', 'segment', 'label', 'extract', 'full_run'],
+        choices=['setup_test', 'download', 'segment', 'label', 'extract', 'full_run'],
         default='full_run',
         help='Run a specific phase of the pipeline.'
     )
     args = parser.parse_args()
 
-    _log(f"--- Geocrop Analysis Pipeline Initializing --- Phase: {args.phase} ---")
+    _log(f"--- Geocrop Analysis Pipeline Initializing --- Config: {args.config}, Phase: {args.phase} ---")
     start_time = time.time()
 
     # --- Setup ---
-    config = load_config()
+    config = load_config(args.config)
+
+    # Handle test setup phase separately as it doesn't need GEE or full config parsing
+    if args.phase == 'setup_test':
+        run_setup_test_phase(config)
+        return
+
     aoi_name = config['aoi_name']
     output_dir = os.path.join(config['output_dir'], aoi_name)
     data_dir = os.path.join(config['data_dir'], aoi_name)

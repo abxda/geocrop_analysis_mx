@@ -35,7 +35,8 @@ def label_and_rasterize(config, segmented_polygons_path, clumps_path, reference_
     intersecting_data = gpd.sjoin(polygons, samples, predicate='intersects')
 
     # 3. Aggregate labels for each polygon
-    grouped_names = intersecting_data.groupby(level=0)['klass'].apply(lambda x: list(x.dropna().unique()))
+    label_field = config['labels_field_name']
+    grouped_names = intersecting_data.groupby(level=0)[label_field].apply(lambda x: list(x.dropna().unique()))
     temp_df = pd.DataFrame(grouped_names.tolist(), index=grouped_names.index)
     # Rename columns to etiqueta_1, etiqueta_2, etc.
     temp_df.columns = [f'etiqueta_{i+1}' for i in range(temp_df.shape[1])]
