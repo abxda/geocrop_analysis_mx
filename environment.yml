@@ -1,0 +1,19 @@
+name: geocrop_analysis_mx
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - gdal
+  - geopandas
+  - rasterio
+  - rsgislib
+  - earthengine-api
+  - pandas
+  - numpy<2
+  - scikit-learn
+  - pycaret
+  - tpot
+  - pytorch
+  - requests
+  - pyyaml

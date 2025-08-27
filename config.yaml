@@ -1,0 +1,68 @@
+# -----------------------------------------------------------------------------
+# General Configuration
+# -----------------------------------------------------------------------------
+# Name of the Area of Interest (AOI). This should match the folder name in 
+# the `data_dir` and will be used to create a corresponding output folder.
+aoi_name: "AOI_Chihuahua_2023"
+
+# Base directories - relative to the project root `geocrop_analysis_mx`
+# IMPORTANT: These point to folders OUTSIDE the project folder.
+data_dir: "../data"
+output_dir: "../outputs"
+
+# -----------------------------------------------------------------------------
+# Data Source Configuration
+# -----------------------------------------------------------------------------
+# Name of the geopackage file within the aoi folder that defines the boundary.
+# Path will be constructed as: {data_dir}/{aoi_name}/{aoi_file}
+aoi_file: "AOI_Chihuahua.gpkg"
+
+# Name of the geopackage file with the ground truth labels.
+# Path will be constructed as: {data_dir}/{aoi_name}/labels/{labels_file}
+labels_file: "etiquetas_chihuahua.gpkg"
+
+# Date ranges for monthly composite downloads.
+# Format: [start_date, end_date]
+date_ranges:
+  - ["2023-04-01", "2023-04-30"]
+  - ["2023-05-01", "2023-05-31"]
+  - ["2023-06-01", "2023-06-30"]
+  - ["2023-07-01", "2023-07-31"]
+  - ["2023-08-01", "2023-08-31"]
+  - ["2023-09-01", "2023-09-30"]
+  - ["2023-10-01", "2023-10-31"]
+  - ["2023-11-01", "2023-11-30"]
+
+# Date range for the main geometric median composite used for segmentation.
+# This composite is the baseline image.
+segmentation_composite:
+  start_date: "2023-05-01"
+  end_date: "2023-11-30"
+
+# -----------------------------------------------------------------------------
+# Processing Parameters
+# -----------------------------------------------------------------------------
+segmentation_params:
+  num_clusters: 80
+  min_n_pxls: 100
+  dist_thres: 100.0
+  # Bands to use from the geometric median composite for segmentation.
+  # 1-based index.
+  bands: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+
+# -----------------------------------------------------------------------------
+# Output File Naming
+# -----------------------------------------------------------------------------
+# A dictionary to define the names of key output files.
+# The pipeline will add prefixes and place them in the correct output subdirectories.
+output_names:
+  # Main composite from `segmentation_composite` dates
+  segmentation_image: "GM_Seg_Composite.tif"
+  # Segmentation outputs
+  segmented_clumps: "segmented_clumps.kea"
+  segmented_polygons: "segmented_polygons.shp"
+  # Labeled outputs
+  labeled_polygons: "labeled_polygons.shp"
+  rasterized_labels: "rasterized_labels.tif"
+  # Final features file
+  features_csv: "features.csv"
