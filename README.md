@@ -74,16 +74,22 @@ python src/main.py --config config.test.yaml --phase full_run
 
 ### 2. Step-by-Step Execution
 
-This gives you full control to inspect the outputs of each phase.
+This workflow gives you full control to run each phase individually and inspect the outputs before proceeding. This is ideal for debugging and understanding the pipeline.
+
+*Note: You must run the `setup_test` phase once before starting this workflow for the test case.*
 
 ```bash
-# Step 1: Download all data
+# Step 1: Download all required imagery for the test period
 python src/main.py --config config.test.yaml --phase download
 
-# Step 2: After inspecting, run segmentation
+# Step 2: Segment the main composite image into polygons
 python src/main.py --config config.test.yaml --phase segment
 
-# ...and so on for 'label' and 'extract'
+# Step 3: Label the segments using ground truth data and create the class raster
+python src/main.py --config config.test.yaml --phase label
+
+# Step 4: Calculate all statistical features for each segment and export to CSV
+python src/main.py --config config.test.yaml --phase extract
 ```
 
 ### 3. Hybrid Execution (Using Pre-existing Data)
