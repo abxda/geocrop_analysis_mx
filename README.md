@@ -39,7 +39,7 @@ Using **Conda** is required. We recommend **Miniforge** as it is a minimal, cond
     ```bash
     python check_env.py
     ```
-    *You should see `[SUCCESS]` messages for all libraries. If you see any `[FAILURE]` messages, your environment may not have been created correctly. Try deleting it (`conda env remove -n geocrop_analysis_mx`) and creating it again.*
+    *You should see `[SUCCESS]` messages for all libraries. If you see any `[FAILURE]` messages, your environment may not have been created correctly.*
 
 8.  **Authenticate Google Earth Engine**: Run `earthengine authenticate` if it's your first time.
 
@@ -74,11 +74,12 @@ python src/main.py --config config.test.yaml --phase full_run
 
 ### 2. Step-by-Step Execution
 
-This workflow gives you full control to run each phase individually and inspect the outputs before proceeding. This is ideal for debugging and understanding the pipeline.
-
-*Note: You must run the `setup_test` phase once before starting this workflow for the test case.*
+This workflow gives you full control to run each phase individually and inspect the outputs. It's the recommended way to understand the pipeline the first time.
 
 ```bash
+# Step 0: Prepare test data (only needs to be run once)
+python src/main.py --phase setup_test
+
 # Step 1: Download all required imagery for the test period
 python src/main.py --config config.test.yaml --phase download
 
