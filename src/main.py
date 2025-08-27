@@ -29,99 +29,117 @@ def _generate_monthly_ranges(start_date, end_date):
         )
     return date_ranges
 
-def run_gdal_merge(input_tile_pattern, output_image_path):
-    """Merges tile images into a single output image using gdal_merge.py."""
-    tile_files = glob.glob(input_tile_pattern)
-    if not tile_files:
-        _log(f"No tiles found for pattern: {input_tile_pattern}. Skipping merge.")
+def run_gdal_merge(tile_paths, output_image_path):
+    """Merges tile images into a single output image and cleans up."""
+    if not tile_paths or not isinstance(tile_paths, list):
+        _log(f"- No new tiles to merge for {os.path.basename(output_image_path)}.")
         return
-    command = ['gdal_merge.py', '-o', output_image_path, '-of', 'GTiff', '-co', 'COMPRESS=LZW'] + tile_files
-    _log(f"Merging {len(tile_files)} tiles into {os.path.basename(output_image_path)}")
-    subprocess.run(command, check=True, capture_output=True, text=True)
-    _log("Merge complete.")
-    for tile_file in tile_files:
-        os.remove(tile_file)
-    _log("Cleaned up temporary tiles.")
+
+    tile_dir = os.path.dirname(tile_paths[0])
+    _log(f"- Merging {len(tile_paths)} tiles from {os.path.basename(tile_dir)} into {os.path.basename(output_image_path)}")
+    
+    command = ['gdal_merge.py', '-o', output_image_path, '-of', 'GTiff', '-co', 'COMPRESS=LZW'] + tile_paths
+    
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+        _log("- Merge successful.")
+        shutil.rmtree(tile_dir)
+        _log(f"- Cleaned up temporary tile directory: {os.path.basename(tile_dir)}")
+    except subprocess.CalledProcessError as e:
+        _log(f"- GDAL Merge FAILED. Error: {e.stderr}")
+        _log(f"- Temporary tiles kept for inspection in: {tile_dir}")
 
 def show_config(config_path, config_data):
-    """Prints the configuration in a readable format."""
     _log(f"--- Displaying settings from: {config_path} ---")
     print(json.dumps(config_data, indent=2))
     _log("--- End of settings ---")
 
 def run_setup_test_phase(config):
-    """Copies test data into the correct data directory structure."""
     _log("Setting up test environment...")
     aoi_identifier = os.path.splitext(config['aoi_file'])[0]
     source_dir = os.path.join(os.path.dirname(__file__), '..', 'test_data')
     dest_aoi_dir = os.path.join(config['data_dir'], aoi_identifier)
-    dest_labels_dir = os.path.join(dest_aoi_dir, 'labels')
-    os.makedirs(dest_labels_dir, exist_ok=True)
+    os.makedirs(os.path.join(dest_aoi_dir, 'labels'), exist_ok=True)
 
+    # Copy AOI file
     source_aoi_path = os.path.join(source_dir, config['aoi_file'])
     dest_aoi_path = os.path.join(dest_aoi_dir, config['aoi_file'])
-    source_labels_path = os.path.join(source_dir, config['labels_file'])
-    dest_labels_path = os.path.join(dest_labels_dir, config['labels_file'])
-
     _log(f"Copying {config['aoi_file']} to {dest_aoi_path}")
     shutil.copy(source_aoi_path, dest_aoi_path)
+
+    # Copy labels file
+    source_labels_path = os.path.join(source_dir, config['labels_file'])
+    dest_labels_path = os.path.join(dest_aoi_dir, 'labels', config['labels_file'])
     _log(f"Copying {config['labels_file']} to {dest_labels_path}")
     shutil.copy(source_labels_path, dest_labels_path)
     _log("Test data setup complete.")
 
 def run_download_phase(config, study_area, aoi_identifier):
-    """Runs the full data download and preprocessing phase."""
+    output_dir = os.path.join(config['output_dir'], aoi_identifier)
     study_period = config['study_period']
     monthly_ranges = _generate_monthly_ranges(study_period['start_date'], study_period['end_date'])
     
+    # --- Download Main Segmentation Composite ---
+    _log("--- Processing Main Segmentation Composite ---")
     if config['segmentation_composite_uses_full_study_period']:
         seg_start, seg_end = study_period['start_date'], study_period['end_date']
     else:
         seg_start, seg_end = config['segmentation_composite_custom_range']['start_date'], config['segmentation_composite_custom_range']['end_date']
 
-    output_dir = os.path.join(config['output_dir'], aoi_identifier)
     seg_output_dir = os.path.join(output_dir, 'segmentation')
     main_composite_path = os.path.join(seg_output_dir, config['output_names']['segmentation_image'])
     
-    if not os.path.exists(main_composite_path):
-        _log(f"Downloading main segmentation composite for period {seg_start} to {seg_end}...")
-        hls_collection = multispectral.get_hls_collection(seg_start, seg_end, study_area)
-        if hls_collection.size().getInfo() > 0:
-            main_composite = multispectral.get_geometric_median(hls_collection)
-            multispectral.download_composite(main_composite, study_area, main_composite_path)
-            run_gdal_merge(os.path.join(seg_output_dir, 'tile_*.tif'), main_composite_path)
-        else:
-            _log("No images found for the main composite. Skipping download.")
+    hls_collection = multispectral.get_hls_collection(seg_start, seg_end, study_area)
+    if hls_collection.size().getInfo() > 0:
+        main_composite = multispectral.get_geometric_median(hls_collection)
+        tile_paths = multispectral.download_composite(main_composite, study_area, main_composite_path)
+        run_gdal_merge(tile_paths, main_composite_path)
     else:
-        _log(f"Main composite already exists: {os.path.basename(main_composite_path)}")
-    
-    config['date_ranges'] = monthly_ranges
-    radar.download_radar_composites(config, study_area)
-    _log("Download phase complete.")
+        _log(f"No images found for the main composite period ({seg_start} to {seg_end}). Skipping download.")
+
+    # --- Download Monthly Composites ---
+    _log("--- Processing Monthly Composites ---")
+    for start, end in monthly_ranges:
+        month_str = start[:7]
+        _log(f"-- Processing month: {month_str} --")
+
+        # Optical
+        optical_dir = os.path.join(output_dir, 'multispectral', month_str)
+        optical_path = os.path.join(optical_dir, f"multispectral_{month_str}.tif")
+        hls_monthly = multispectral.get_hls_collection(start, end, study_area)
+        if hls_monthly.size().getInfo() > 0:
+            optical_composite = multispectral.get_geometric_median(hls_monthly)
+            tile_paths_opt = multispectral.download_composite(optical_composite, study_area, optical_path)
+            run_gdal_merge(tile_paths_opt, optical_path)
+        else:
+            _log(f"No optical images found for {month_str}. Skipping.")
+
+        # Radar
+        radar_dir = os.path.join(output_dir, 'radar', month_str)
+        radar_path = os.path.join(radar_dir, f"radar_{month_str}.tif")
+        s1_monthly = radar.get_s1_collection(start, end, study_area)
+        if s1_monthly.size().getInfo() > 0:
+            radar_composite = s1_monthly.median()
+            tile_paths_rad = multispectral.download_composite(radar_composite, study_area, radar_path)
+            run_gdal_merge(tile_paths_rad, radar_path)
+        else:
+            _log(f"No radar images found for {month_str}. Skipping.")
 
 def main():
-    """Main orchestrator for the geocrop analysis pipeline."""
     parser = argparse.ArgumentParser(description="GeoCrop Analysis Pipeline")
-    parser.add_argument('--config', default='config.yaml', help='Configuration file to use (e.g., config.test.yaml)')
-    parser.add_argument('--phase', choices=['show_config', 'setup_test', 'download', 'segment', 'label', 'extract', 'full_run'], default='full_run', help='The specific pipeline phase to run.')
+    parser.add_argument('--config', default='config.yaml', help='Configuration file to use')
+    parser.add_argument('--phase', choices=['show_config', 'setup_test', 'download', 'segment', 'label', 'extract', 'full_run'], default='full_run', help='The specific pipeline phase to run')
     args = parser.parse_args()
 
     _log(f"--- Geocrop Analysis Pipeline Initializing --- Config: {args.config}, Phase: {args.phase} ---")
-    
     config = load_config(args.config)
 
-    # --- Execute Non-GEE tasks ---
-    if args.phase == 'show_config':
-        show_config(args.config, config)
-        return
-    
-    if args.phase == 'setup_test':
-        run_setup_test_phase(config)
+    if args.phase in ['show_config', 'setup_test']:
+        if args.phase == 'show_config': show_config(args.config, config)
+        if args.phase == 'setup_test': run_setup_test_phase(config)
         return
 
-    # --- Execute GEE-dependent tasks ---
     pipeline_start_time = time.time()
-    
     _log("Initializing Google Earth Engine...")
     gee_utils.initialize_gee()
     
@@ -133,9 +151,6 @@ def main():
     aoi_path = os.path.join(data_dir, config['aoi_file'])
     study_area = ee.Geometry(gpd.read_file(aoi_path).geometry[0].__geo_interface__)
 
-    main_composite_path = os.path.join(output_dir, 'segmentation', config['output_names']['segmentation_image'])
-    clumps_path = os.path.join(output_dir, 'segmentation', config['output_names']['segmented_clumps'])
-
     if args.phase == 'download' or args.phase == 'full_run':
         phase_start_time = time.time()
         _log("Executing PHASE: Download")
@@ -145,16 +160,19 @@ def main():
     if args.phase == 'segment' or args.phase == 'full_run':
         phase_start_time = time.time()
         _log("Executing PHASE: Segment")
+        main_composite_path = os.path.join(output_dir, 'segmentation', config['output_names']['segmentation_image'])
         if not os.path.exists(main_composite_path):
             _log(f"Error: Main composite image not found. Please run the 'download' phase first.")
             return
-        segmentation.run_segmentation(config, main_composite_path)
+        clumps_path, _ = segmentation.run_segmentation(config, main_composite_path)
         _log(f"PHASE 'Segment' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
 
     if args.phase == 'label' or args.phase == 'full_run':
         phase_start_time = time.time()
         _log("Executing PHASE: Label")
+        main_composite_path = os.path.join(output_dir, 'segmentation', config['output_names']['segmentation_image'])
         segmented_polygons_path = os.path.join(output_dir, 'segmentation', config['output_names']['segmented_polygons'])
+        clumps_path = os.path.join(output_dir, 'segmentation', config['output_names']['segmented_clumps'])
         if not os.path.exists(segmented_polygons_path):
             _log("Error: Segmented polygons not found. Please run the 'segment' phase first.")
             return
@@ -164,6 +182,7 @@ def main():
     if args.phase == 'extract' or args.phase == 'full_run':
         phase_start_time = time.time()
         _log("Executing PHASE: Extract Features")
+        clumps_path = os.path.join(output_dir, 'segmentation', config['output_names']['segmented_clumps'])
         if not os.path.exists(clumps_path):
             _log("Error: Clumps file not found. Please run the 'segment' and 'label' phases first.")
             return

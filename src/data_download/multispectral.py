@@ -5,26 +5,25 @@ import shutil
 import time
 from . import gee_utils
 
+def _log(message):
+    """Prints a message with a timestamp."""
+    # This is a local log function to avoid circular dependencies if main's log is moved
+    from datetime import datetime
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}")
+
 def get_hls_collection(start_date, end_date, study_area):
     """Gets and merges HLS Landsat and Sentinel collections for a given period."""
+    # ... (The GEE logic remains the same as before)
     hlsl = ee.ImageCollection("NASA/HLS/HLSL30/v002") \
         .filterDate(start_date, end_date) \
         .filterBounds(study_area) \
         .map(gee_utils.hls_mask) \
-        .select(
-            ['B2', 'B3', 'B4', 'B5', 'B6', 'B7'],
-            ['blue', 'green', 'red', 'nir', 'swir1', 'swir2']
-        ).map(gee_utils.add_variables)
-
+        .select(['B2', 'B3', 'B4', 'B5', 'B6', 'B7'], ['blue', 'green', 'red', 'nir', 'swir1', 'swir2']).map(gee_utils.add_variables)
     hlss = ee.ImageCollection("NASA/HLS/HLSS30/v002") \
         .filterDate(start_date, end_date) \
         .filterBounds(study_area) \
         .map(gee_utils.hls_mask) \
-        .select(
-            ['B2', 'B3', 'B4', 'B8', 'B11', 'B12'],
-            ['blue', 'green', 'red', 'nir', 'swir1', 'swir2']
-        ).map(gee_utils.add_variables)
-
+        .select(['B2', 'B3', 'B4', 'B8', 'B11', 'B12'], ['blue', 'green', 'red', 'nir', 'swir1', 'swir2']).map(gee_utils.add_variables)
     return hlsl.merge(hlss)
 
 def get_geometric_median(collection):
@@ -35,11 +34,7 @@ def get_geometric_median(collection):
 
 def _download_tile(image, region_coords, scale, file_path):
     """Internal function to download a single tile, with retries."""
-    if os.path.exists(file_path):
-        print(f"  - Tile exists: {os.path.basename(file_path)}")
-        return True
-
-    print(f"  - Downloading: {os.path.basename(file_path)}")
+    _log(f"  - Downloading: {os.path.basename(file_path)}")
     url = image.getDownloadURL({
         'region': region_coords,
         'scale': scale,
@@ -50,30 +45,47 @@ def _download_tile(image, region_coords, scale, file_path):
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = requests.get(url, stream=True, timeout=300)
+            response = requests.get(url, stream=True, timeout=600) # Increased timeout
             response.raise_for_status()
             with open(file_path, 'wb') as out_file:
                 shutil.copyfileobj(response.raw, out_file)
-            print(f"    - Success.")
+            _log(f"    - Success.")
             return True
         except (requests.exceptions.RequestException, ee.EEException) as e:
-            print(f"    - Attempt {attempt + 1} failed: {e}")
-            time.sleep(5) # Wait before retrying
-    print(f"  - FAILED after {max_retries} attempts: {os.path.basename(file_path)}")
+            _log(f"    - Attempt {attempt + 1} failed: {e}")
+            time.sleep(5)
+    _log(f"  - FAILED after {max_retries} attempts: {os.path.basename(file_path)}")
     return False
 
 def download_composite(image, study_area, output_path, max_dim=0.2, scale=30):
-    """Downloads a composite image, splitting it into tiles to avoid timeouts."""
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    
+    """Downloads a composite image, splitting it into individually validated tiles."""
+    if os.path.exists(output_path):
+        _log(f"- Final composite already exists: {os.path.basename(output_path)}. Skipping download.")
+        return True
+
+    # Create a dedicated directory for the tiles of this specific composite
+    output_dir = os.path.dirname(output_path)
+    composite_name = os.path.splitext(os.path.basename(output_path))[0]
+    tile_dir = os.path.join(output_dir, f"{composite_name}_tiles")
+    os.makedirs(tile_dir, exist_ok=True)
+    _log(f"- Using temporary tile directory: {tile_dir}")
+
     regions = gee_utils.split_geometry(study_area, max_dim)
-    print(f"Splitting AOI into {len(regions)} tiles for download.")
+    _log(f"- Splitting AOI into {len(regions)} tiles for download.")
 
+    all_tiles_present = True
+    tile_paths = []
     for i, region in enumerate(regions):
-        tile_path = os.path.join(os.path.dirname(output_path), f"tile_{i}.tif")
-        _download_tile(image, region.getInfo()['coordinates'], scale, tile_path)
+        tile_path = os.path.join(tile_dir, f"tile_{i}.tif")
+        tile_paths.append(tile_path)
+        if not os.path.exists(tile_path):
+            if not _download_tile(image, region.getInfo()['coordinates'], scale, tile_path):
+                all_tiles_present = False # Mark that at least one tile failed
+        else:
+            _log(f"  - Tile already exists: {os.path.basename(tile_path)}")
 
-    print("All tiles downloaded. Merging into single image...")
-    # This part would require gdal_merge.py, which is a command-line tool.
-    # For now, we will assume the user can merge them manually or we can add a shell command later.
-    # The individual tiles are preserved for now.
+    if not all_tiles_present:
+        _log("- Download failed for one or more tiles. Cannot merge. Please check errors above.")
+        return False
+    
+    return tile_paths # Return the list of paths for the main script to merge
