@@ -6,6 +6,7 @@ import ee
 import argparse
 import time
 from datetime import datetime
+import json
 import pandas as pd
 import shutil
 
@@ -163,6 +164,14 @@ def main():
         # Pass the full config to the feature extraction function
         feature_extraction_config = config.copy()
         feature_extraction_config['output_dir'] = output_dir
+        feature_extraction.extract_features_to_csv(feature_extraction_config, clumps_path)
+        _log(f"PHASE 'Extract Features' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
+
+    _log(f"--- Pipeline Finished --- Total Duration: {time.time() - start_time:.2f} seconds ---")
+
+if __name__ == "__main__":
+    main()
+_config['output_dir'] = output_dir
         feature_extraction.extract_features_to_csv(feature_extraction_config, clumps_path)
         _log(f"PHASE 'Extract Features' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
 
