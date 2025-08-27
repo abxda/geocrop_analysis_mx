@@ -20,12 +20,22 @@ Using **Conda** is required. We recommend **Miniforge** as it is a minimal, cond
 2.  **Open the Miniforge Prompt**: Open the "Miniforge Prompt" (Windows) or your terminal (macOS/Linux).
 3.  **Clone the Project**: `git clone https://github.com/abxda/geocrop_analysis_mx.git`
 4.  **Create Project Directories**: Outside the project folder, create the `data` and `outputs` directories.
-5.  **Create and Activate Conda Environment**: Navigate into the `geocrop_analysis_mx` folder and run:
+5.  **Install Mamba & Create Environment**: Mamba is a much faster, parallel re-implementation of conda. We highly recommend using it for a faster setup. Navigate into the `geocrop_analysis_mx` folder and run:
     ```bash
-    conda env create -f environment.yml
+    # First, install mamba into your base conda environment
+    conda install mamba -n base -c conda-forge
+
+    # Now, use mamba to create the project environment (this will be much faster)
+    mamba env create -f environment.yml
+    ```
+    *(If you prefer not to use Mamba, the original `conda env create -f environment.yml` command will also work, but may take significantly longer.)*
+
+6.  **Activate the Environment**: This command remains the same.
+    ```bash
     conda activate geocrop_analysis_mx
     ```
-6.  **Authenticate Google Earth Engine**: Run `earthengine authenticate` if it's your first time.
+
+7.  **Authenticate Google Earth Engine**: Run `earthengine authenticate` if it's your first time.
 
 ## Preparing Your Own Data
 
