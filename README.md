@@ -46,7 +46,7 @@ This project relies on a specific set of geospatial libraries. Using Conda is **
 
 -   Navigate to your desired working directory and clone this repository.
     ```bash
-    git clone <repository_url>
+    git clone https://github.com/abxda/geocrop_analysis_mx.git
     ```
 
 **4. Create Project Directories**
