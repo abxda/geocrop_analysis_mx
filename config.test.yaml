@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # TEST Configuration for the Yaqui Valley Example
 # -----------------------------------------------------------------------------
-aoi_name: "AOI_Yaqui_Test"
+
 data_dir: "../data"
 output_dir: "../outputs"
 
@@ -9,12 +9,10 @@ aoi_file: "aoi_yaqui_test.gpkg"
 labels_file: "crop_labels_yaqui_test.gpkg"
 labels_field_name: "crop_name"
 
-# Define the overall study period for the test.
 study_period:
   start_date: "2017-10-01"
   end_date: "2018-05-31"
 
-# For the test, the segmentation composite will use the full (short) study period.
 segmentation_composite_uses_full_study_period: true
 segmentation_composite_custom_range:
   start_date: ""
@@ -26,13 +24,10 @@ segmentation_params:
   dist_thres: 100.0
   bands: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 
-# Output file names for the test run.
 output_names:
   segmentation_image: "GM_Seg_Composite_Test.tif"
   segmented_clumps: "segmented_clumps_test.kea"
   segmented_polygons: "segmented_polygons_test.shp"
   labeled_polygons: "labeled_polygons_test.shp"
-  rasterized_labels: "rasterized_labels_test.tif"
-  features_csv: "features_test.csv"olygons_test.shp"
   rasterized_labels: "rasterized_labels_test.tif"
   features_csv: "features_test.csv"

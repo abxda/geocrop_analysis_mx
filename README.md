@@ -14,77 +14,51 @@ This project provides a complete, modular pipeline for crop classification using
 
 ## Installation
 
-Using **Conda** is required. We recommend **Miniforge** as it is a minimal, conda-forge-first installer that is ideal for scientific packages.
+(For a detailed guide, please refer to the previous instructions on setting up Miniforge, Conda, and authenticating with GEE.)
 
-1.  **Install Miniforge**: Download and install from the [Miniforge GitHub releases page](https://github.com/conda-forge/miniforge/releases).
-2.  **Open the Miniforge Prompt**: Open the "Miniforge Prompt" (Windows) or your terminal (macOS/Linux).
-3.  **Clone the Project**: `git clone https://github.com/abxda/geocrop_analysis_mx.git`
-4.  **Create Project Directories**: Outside the project folder, create the `data` and `outputs` directories.
-5.  **Install Mamba & Create Environment**: Mamba is a much faster, parallel re-implementation of conda. We highly recommend using it for a faster setup. Navigate into the `geocrop_analysis_mx` folder and run:
-    ```bash
-    # First, install mamba into your base conda environment
-    conda install mamba -n base -c conda-forge
-
-    # Now, use mamba to create the project environment (this will be much faster)
-    mamba env create -f environment.yml
-    ```
-    *(If you prefer not to use Mamba, the original `conda env create -f environment.yml` command will also work, but may take significantly longer.)*
-
-6.  **Activate the Environment**: This command remains the same.
-    ```bash
-    conda activate geocrop_analysis_mx
-    ```
-
-7.  **Validate the Environment**: Before running the main pipeline, verify that all critical libraries were installed correctly.
-    ```bash
-    python check_env.py
-    ```
-    *You should see `[SUCCESS]` messages for all libraries. If you see any `[FAILURE]` messages, your environment may not have been created correctly.*
-
-8.  **Authenticate Google Earth Engine**: Run `earthengine authenticate` if it's your first time.
-
-## Preparing Your Own Data
-
-To run the pipeline on your data, create a folder inside `data/`. The folder name **must match the name of your AOI file without the extension** (e.g., `data/my_region/` for `my_region.shp`).
-
--   **Area of Interest (AOI) File**: `data/<your_aoi_name>/<your_aoi_name>.gpkg` (or `.shp`). Must contain a **single polygon** in `EPSG:4326`.
--   **Labels File**: `data/<your_aoi_name>/labels/<your_labels_file>.gpkg` (or `.shp`). Must contain points/polygons with a class name column. The CRS must match the AOI.
-
-## Configuration (`config.yaml`)
-
-This is the main control file. Copy it to `config.custom.yaml` and edit it for your project. Key fields:
-
--   `aoi_file`: Filename of your AOI. Determines the name of your data and results folders.
--   `labels_file`: Filename of your ground truth labels.
--   `labels_field_name`: The **exact column name** in your labels file that contains the crop names.
--   `study_period`: Set the `start_date` and `end_date` for your analysis. The pipeline automatically generates monthly composites for this period.
+1.  **Activate Environment**: `conda activate geocrop_analysis_mx`
+2.  **Validate Environment**: `python check_env.py`
 
 ## How to Run the Pipeline
 
-### Using the Included Test Case
+### Running the Included Test Case (Step-by-Step)
 
-This is the best way to start, to ensure your environment is working correctly.
+This is the recommended workflow for first-time users to understand the pipeline and verify the installation. Each command executes a single, major phase of the project.
 
--   **Step 1: Set up the test data.** This command reads `config.test.yaml` to identify the test files and copies them into the `data/` directory.
-    ```bash
-    python src/main.py --config config.test.yaml --phase setup_test
-    ```
+```bash
+# Step 0: Prepare test data (only needs to be run once)
+# This copies the sample files into the correct 'data/' directory.
+python src/main.py --config config.test.yaml --phase setup_test
 
--   **Step 2: Run the test pipeline.** This executes the full workflow on the sample data.
+# Step 1: Download all required imagery for the test period
+# This will create monthly composites in the 'outputs/aoi_yaqui_test/' folder.
+python src/main.py --config config.test.yaml --phase download
+
+# Step 2: Segment the main composite image into polygons
+# This creates the primary segmentation files (.shp and .kea).
+python src/main.py --config config.test.yaml --phase segment
+
+# Step 3: Label the segments using ground truth data
+# This creates the rasterized label image.
+python src/main.py --config config.test.yaml --phase label
+
+# Step 4: Calculate all features and export to CSV
+# This generates the final data file for analysis.
+python src/main.py --config config.test.yaml --phase extract
+```
+
+After a successful run, you should find the key output files in your `outputs/aoi_yaqui_test/` directory, such as `features_test.csv`.
+
+### Advanced Workflows
+
+-   **End-to-End Run (`full_run`):** To execute all steps at once, use the `full_run` phase. The script will automatically skip any stages where the output files already exist.
     ```bash
     python src/main.py --config config.test.yaml --phase full_run
     ```
 
--   **Step 3: Verify the results.** After a successful run, you should find the following key files in your `outputs/aoi_yaqui_test/` directory:
-    -   `segmentation/GM_Seg_Composite_Test.tif`: The main composite image used for segmentation.
-    -   `segmentation/segmented_polygons_test.shp`: The vector file of the generated segments.
-    -   `labeling/rasterized_labels_test.tif`: The rasterized ground truth labels.
-    -   `features_test.csv`: The final output file with all calculated features for each segment, ready for analysis or machine learning.
+-   **Using Your Own Data:** Prepare your data and configuration file as described in the previous documentation, then run the pipeline pointing to your custom config file.
+    ```bash
+    python src/main.py --config config.my_region.yaml
+    ```
 
-### Execution Workflows
-
-The pipeline is designed for flexibility. You can run it end-to-end, step-by-step, or on pre-existing data.
-
--   **End-to-End Run (`full_run`):** Runs all necessary steps from start to finish, automatically skipping completed stages.
--   **Step-by-Step (`--phase download`, `--phase segment`, etc.):** Gives you full control to run each phase individually and inspect the outputs. See the `main.py` file for all phase options.
--   **Hybrid Execution:** You can place your own processed files (e.g., downloaded images) in the correct `outputs/` subfolder. The pipeline will detect them and continue from the next required step.
+-   **Hybrid Execution:** You can place your own previously processed files (e.g., downloaded images) in the correct `outputs/` subfolder. The pipeline will detect them and continue from the next required step.
