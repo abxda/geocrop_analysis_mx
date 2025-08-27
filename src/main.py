@@ -107,10 +107,12 @@ def main():
 
     config = load_config(args.config)
 
+    # The setup_test phase is special, it prepares the environment based on its config
     if args.phase == 'setup_test':
         run_setup_test_phase(config)
         return
 
+    # --- Main Pipeline Setup ---
     aoi_identifier = os.path.splitext(config['aoi_file'])[0]
     data_dir = os.path.join(config['data_dir'], aoi_identifier)
     output_dir = os.path.join(config['output_dir'], aoi_identifier)

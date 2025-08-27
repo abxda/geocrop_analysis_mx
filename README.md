@@ -59,52 +59,32 @@ This is the main control file. Copy it to `config.custom.yaml` and edit it for y
 -   `labels_field_name`: The **exact column name** in your labels file that contains the crop names.
 -   `study_period`: Set the `start_date` and `end_date` for your analysis. The pipeline automatically generates monthly composites for this period.
 
-## Execution Workflows
+## How to Run the Pipeline
+
+### Using the Included Test Case
+
+This is the best way to start, to ensure your environment is working correctly.
+
+-   **Step 1: Set up the test data.** This command reads `config.test.yaml` to identify the test files and copies them into the `data/` directory.
+    ```bash
+    python src/main.py --config config.test.yaml --phase setup_test
+    ```
+
+-   **Step 2: Run the test pipeline.** This executes the full workflow on the sample data.
+    ```bash
+    python src/main.py --config config.test.yaml --phase full_run
+    ```
+
+-   **Step 3: Verify the results.** After a successful run, you should find the following key files in your `outputs/aoi_yaqui_test/` directory:
+    -   `segmentation/GM_Seg_Composite_Test.tif`: The main composite image used for segmentation.
+    -   `segmentation/segmented_polygons_test.shp`: The vector file of the generated segments.
+    -   `labeling/rasterized_labels_test.tif`: The rasterized ground truth labels.
+    -   `features_test.csv`: The final output file with all calculated features for each segment, ready for analysis or machine learning.
+
+### Execution Workflows
 
 The pipeline is designed for flexibility. You can run it end-to-end, step-by-step, or on pre-existing data.
 
-### 1. End-to-End Run (Piloto Automático)
-
-This is the most common use case. It runs all necessary steps from start to finish, automatically skipping completed stages.
-
-```bash
-# Example for the test case
-python src/main.py --config config.test.yaml --phase full_run
-```
-
-### 2. Step-by-Step Execution
-
-This workflow gives you full control to run each phase individually and inspect the outputs. It's the recommended way to understand the pipeline the first time.
-
-```bash
-# Step 0: Prepare test data (only needs to be run once)
-python src/main.py --phase setup_test
-
-# Step 1: Download all required imagery for the test period
-python src/main.py --config config.test.yaml --phase download
-
-# Step 2: Segment the main composite image into polygons
-python src/main.py --config config.test.yaml --phase segment
-
-# Step 3: Label the segments using ground truth data and create the class raster
-python src/main.py --config config.test.yaml --phase label
-
-# Step 4: Calculate all statistical features for each segment and export to CSV
-python src/main.py --config config.test.yaml --phase extract
-```
-
-### 3. Hybrid Execution (Using Pre-existing Data)
-
-You can place your own previously downloaded or processed files in the correct `outputs/<your_aoi_name>/` subfolder. When you run a later phase, the script will detect these files and use them as input.
-
-### Included Test Case
-
--   **Step 1: Set up the test data.** This command copies the sample files into `data/aoi_yaqui_test/`.
-    ```bash
-    python src/main.py --phase setup_test
-    ```
-
--   **Step 2: Run the test pipeline.**
-    ```bash
-    python src/main.py --config config.test.yaml
-    ```
+-   **End-to-End Run (`full_run`):** Runs all necessary steps from start to finish, automatically skipping completed stages.
+-   **Step-by-Step (`--phase download`, `--phase segment`, etc.):** Gives you full control to run each phase individually and inspect the outputs. See the `main.py` file for all phase options.
+-   **Hybrid Execution:** You can place your own processed files (e.g., downloaded images) in the correct `outputs/` subfolder. The pipeline will detect them and continue from the next required step.
