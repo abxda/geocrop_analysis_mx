@@ -37,7 +37,6 @@ segmentation_composite_custom_range:
 segmentation_params:
   num_clusters: 80
   min_n_pxls: 100
-  dist_thres: 100.0
   bands: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 
 # -----------------------------------------------------------------------------
