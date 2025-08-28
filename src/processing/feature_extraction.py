@@ -1,53 +1,71 @@
-from rsgislib import rastergis
+import geopandas as gpd
+import pandas as pd
 import os
+from exactextract import exact_extract
 
-def _add_stats_for_image(image_path, clumps_path, band_offset, num_bands):
-    """Helper function to populate RAT with stats for a single image."""
-    print(f"  - Extracting stats from: {os.path.basename(image_path)}")
-    band_stats = []
-    for i in range(1, num_bands + 1):
-        # Define column names based on the band number and offset
-        col_prefix = f'b{band_offset + i}'
-        band_stats.append(rastergis.BandAttStats(
-            band=i,
-            min_field=f'{col_prefix}Min',
-            max_field=f'{col_prefix}Max',
-            mean_field=f'{col_prefix}Mean',
-            sum_field=f'{col_prefix}Sum',
-            std_dev_field=f'{col_prefix}StdDev'
-        ))
-    
-    rastergis.populate_rat_with_stats(image_path, clumps_path, band_stats)
+def extract_features(output_dir, data_dir, config):
+    """Extracts statistics from all composites for each labeled segment and saves to CSV."""
+    print("\n--- Starting Feature Extraction (using exactextract) ---")
 
-def extract_features_to_csv(features_csv_path, clumps_path, image_paths):
-    """Extracts features from all composites and saves them to a CSV file."""
-    print("\n--- Starting Feature Extraction ---")
+    # --- Define Paths ---
+    labeling_dir = os.path.join(output_dir, 'labeling')
+    features_csv_path = os.path.join(output_dir, config['output_names']['features_csv'])
+    labeled_polygons_path = os.path.join(labeling_dir, config['output_names']['labeled_polygons'])
 
     if os.path.exists(features_csv_path):
-        print(f"- Features CSV already exists: {os.path.basename(features_csv_path)}")
+        print(f"- Features CSV already exists: {os.path.basename(features_csv_path)}. Skipping.")
         return
 
-    # --- Iterate and extract stats ---
-    band_offset = 0
-    for image_info in image_paths:
-        if os.path.exists(image_info['path']):
-            _add_stats_for_image(image_info['path'], clumps_path, band_offset, image_info['num_bands'])
-            band_offset += image_info['num_bands']
-        else:
-            print(f"  - WARNING: Image not found, skipping: {os.path.basename(image_info['path'])}")
+    # --- 1. Load Labeled Polygons ---
+    print(f"- Loading pure labeled polygons from: {os.path.basename(labeled_polygons_path)}")
+    gdf = gpd.read_file(labeled_polygons_path)
+    # We only need the geometry and the final label for the extraction
+    gdf_zones = gdf[['geometry', 'raster_val', 'label']]
 
-    # --- Export to CSV ---
-    print(f"- Exporting RAT to CSV: {os.path.basename(features_csv_path)}")
-    all_columns = rastergis.get_rat_columns(clumps_path)
-    
-    # Filter out columns we don't need in the final CSV
-    columns_to_export = [name for name in all_columns if not (
-        name.startswith('Histogram') or
-        name.startswith('Red') or
-        name.startswith('Green') or
-        name.startswith('Blue') or
-        name.startswith('Alpha'))]
+    # --- 2. Define images and stats to extract ---
+    stats_to_calc = ['mean', 'stddev', 'min', 'max', 'count', 'sum']
+    image_list = []
+    # Add main composite
+    image_list.append({
+        'path': os.path.join(output_dir, 'segmentation', config['output_names']['segmentation_image']),
+        'prefix': 'gm_' # Geomedian
+    })
+    # Add monthly composites
+    from main import _generate_monthly_ranges # Use the same date logic
+    monthly_ranges = _generate_monthly_ranges(config['study_period']['start_date'], config['study_period']['end_date'])
+    for start, _ in monthly_ranges:
+        month_str = start[:7]
+        image_list.append({
+            'path': os.path.join(output_dir, 'multispectral', month_str, f"multispectral_{month_str}.tif"),
+            'prefix': f'ms_{month_str.replace("-", "")}_' # e.g., ms_201710_
+        })
+        image_list.append({
+            'path': os.path.join(output_dir, 'radar', month_str, f"radar_{month_str}.tif"),
+            'prefix': f'sar_{month_str.replace("-", "")}_' # e.g., sar_201710_
+        })
 
-    rastergis.export_rat_cols_to_ascii(clumps_path, features_csv_path, columns_to_export)
+    # --- 3. Loop and Extract ---
+    final_df = gdf_zones.drop(columns='geometry').copy()
+
+    for image_info in image_list:
+        image_path = image_info['path']
+        if not os.path.exists(image_path):
+            print(f"- WARNING: Image not found, skipping: {os.path.basename(image_path)}")
+            continue
+        
+        print(f"- Extracting stats from {os.path.basename(image_path)}...")
+        # exactextract returns a list of dicts, one for each feature
+        results = exact_extract(image_path, gdf_zones, stats_to_calc)
+        df_stats = pd.DataFrame(results)
+
+        # Rename columns with a unique prefix
+        df_stats.columns = [f"{image_info['prefix']}{col}" for col in df_stats.columns]
+        
+        # Join with the main dataframe
+        final_df = final_df.join(df_stats)
+
+    # --- 4. Save Final CSV ---
+    print(f"- Saving final features to {os.path.basename(features_csv_path)}")
+    final_df.to_csv(features_csv_path, index=False)
 
     print("- Feature extraction complete.")

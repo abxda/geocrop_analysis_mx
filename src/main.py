@@ -33,6 +33,7 @@ def run_gdal_merge(tile_paths, output_image_path):
     try:
         subprocess.run(command, check=True, capture_output=True, text=True)
         _log("- Merge successful.")
+        shutil.rmtree(tile_dir)
     except subprocess.CalledProcessError as e:
         _log(f"- GDAL Merge FAILED. Error: {e.stderr}")
         _log(f"- Temporary tiles kept for inspection in: {tile_dir}")
@@ -117,6 +118,7 @@ def main():
     config = load_config(args.config)
     aoi_identifier = os.path.splitext(config['aoi_file'])[0]
     output_dir = os.path.join(config['output_dir'], aoi_identifier)
+    data_dir = os.path.join(config['data_dir'], aoi_identifier)
 
     if args.phase in ['show_config', 'setup_test', 'cleanup_tiles']:
         if args.phase == 'show_config': show_config(args.config, config)
@@ -125,7 +127,6 @@ def main():
         return
 
     pipeline_start_time = time.time()
-    data_dir = os.path.join(config['data_dir'], aoi_identifier)
     
     if args.phase == 'download' or args.phase == 'full_run':
         _log("Initializing Google Earth Engine for Download...")
@@ -144,19 +145,20 @@ def main():
         if not os.path.exists(main_composite_path):
             _log(f"Error: Main composite image not found. Please run the 'download' phase first.")
             return
-        clumps_path = segmentation.run_segmentation(config['segmentation_params'], main_composite_path, os.path.join(output_dir, 'segmentation'), config['output_names'])
+        segmentation.run_segmentation(config['segmentation_params'], main_composite_path, os.path.join(output_dir, 'segmentation'), config['output_names'])
         _log(f"PHASE 'Segment' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
 
-    # The following phases are temporarily disabled until KEA to SHP conversion is added back.
-    if (args.phase == 'label' or args.phase == 'full_run') and False:
+    if args.phase == 'label' or args.phase == 'full_run':
         phase_start_time = time.time()
         _log("Executing PHASE: Label")
-        # ... (logic will be restored later)
+        labeling.label_segments(output_dir, data_dir, config)
+        _log(f"PHASE 'Label' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
 
-    if (args.phase == 'extract' or args.phase == 'full_run') and False:
+    if args.phase == 'extract' or args.phase == 'full_run':
         phase_start_time = time.time()
         _log("Executing PHASE: Extract Features")
-        # ... (logic will be restored later)
+        feature_extraction.extract_features(output_dir, data_dir, config)
+        _log(f"PHASE 'Extract Features' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
 
     if args.phase == 'full_run':
         _log(f"--- Pipeline Finished --- Total Duration: {time.time() - pipeline_start_time:.2f} seconds ---")
