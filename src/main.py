@@ -33,7 +33,6 @@ def run_gdal_merge(tile_paths, output_image_path):
     try:
         subprocess.run(command, check=True, capture_output=True, text=True)
         _log("- Merge successful.")
-        shutil.rmtree(tile_dir)
     except subprocess.CalledProcessError as e:
         _log(f"- GDAL Merge FAILED. Error: {e.stderr}")
         _log(f"- Temporary tiles kept for inspection in: {tile_dir}")
@@ -118,7 +117,6 @@ def main():
     config = load_config(args.config)
     aoi_identifier = os.path.splitext(config['aoi_file'])[0]
     output_dir = os.path.join(config['output_dir'], aoi_identifier)
-    data_dir = os.path.join(config['data_dir'], aoi_identifier)
 
     if args.phase in ['show_config', 'setup_test', 'cleanup_tiles']:
         if args.phase == 'show_config': show_config(args.config, config)
@@ -127,8 +125,8 @@ def main():
         return
 
     pipeline_start_time = time.time()
+    data_dir = os.path.join(config['data_dir'], aoi_identifier)
     
-    # --- GEE dependent phase ---
     if args.phase == 'download' or args.phase == 'full_run':
         _log("Initializing Google Earth Engine for Download...")
         gee_utils.initialize_gee()
@@ -139,7 +137,6 @@ def main():
         run_download_phase(config, study_area, output_dir)
         _log(f"PHASE 'Download' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
 
-    # --- Local processing phases ---
     if args.phase == 'segment' or args.phase == 'full_run':
         phase_start_time = time.time()
         _log("Executing PHASE: Segment")
@@ -147,40 +144,19 @@ def main():
         if not os.path.exists(main_composite_path):
             _log(f"Error: Main composite image not found. Please run the 'download' phase first.")
             return
-        segmentation.run_segmentation(config['segmentation_params'], main_composite_path, os.path.join(output_dir, 'segmentation'), config['output_names'])
+        clumps_path = segmentation.run_segmentation(config['segmentation_params'], main_composite_path, os.path.join(output_dir, 'segmentation'), config['output_names'])
         _log(f"PHASE 'Segment' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
 
-    if args.phase == 'label' or args.phase == 'full_run':
+    # The following phases are temporarily disabled until KEA to SHP conversion is added back.
+    if (args.phase == 'label' or args.phase == 'full_run') and False:
         phase_start_time = time.time()
         _log("Executing PHASE: Label")
-        main_composite_path = os.path.join(output_dir, 'segmentation', config['output_names']['segmentation_image'])
-        segmented_polygons_path = os.path.join(output_dir, 'segmentation', config['output_names']['segmented_polygons'])
-        clumps_path = os.path.join(output_dir, 'segmentation', config['output_names']['segmented_clumps'])
-        labels_gpkg_path = os.path.join(data_dir, 'labels', config['labels_file'])
-        if not os.path.exists(segmented_polygons_path):
-            _log("Error: Segmented polygons not found. Please run the 'segment' phase first.")
-            return
-        labeling.label_and_rasterize(config, segmented_polygons_path, clumps_path, main_composite_path)
-        _log(f"PHASE 'Label' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
+        # ... (logic will be restored later)
 
-    if args.phase == 'extract' or args.phase == 'full_run':
+    if (args.phase == 'extract' or args.phase == 'full_run') and False:
         phase_start_time = time.time()
         _log("Executing PHASE: Extract Features")
-        clumps_path = os.path.join(output_dir, 'segmentation', config['output_names']['segmented_clumps'])
-        if not os.path.exists(clumps_path):
-            _log("Error: Clumps file not found. Please run the 'segment' and 'label' phases first.")
-            return
-        # Construct list of images for feature extraction
-        image_paths = []
-        image_paths.append({'path': os.path.join(output_dir, 'segmentation', config['output_names']['segmentation_image']), 'num_bands': 13})
-        monthly_ranges = _generate_monthly_ranges(config['study_period']['start_date'], config['study_period']['end_date'])
-        for start, _ in monthly_ranges:
-            month_str = start[:7]
-            image_paths.append({'path': os.path.join(output_dir, 'multispectral', month_str, f"multispectral_{month_str}.tif"), 'num_bands': 13})
-            image_paths.append({'path': os.path.join(output_dir, 'radar', month_str, f"radar_{month_str}.tif"), 'num_bands': 3})
-        features_csv_path = os.path.join(output_dir, config['output_names']['features_csv'])
-        feature_extraction.extract_features_to_csv(features_csv_path, clumps_path, image_paths)
-        _log(f"PHASE 'Extract Features' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
+        # ... (logic will be restored later)
 
     if args.phase == 'full_run':
         _log(f"--- Pipeline Finished --- Total Duration: {time.time() - pipeline_start_time:.2f} seconds ---")

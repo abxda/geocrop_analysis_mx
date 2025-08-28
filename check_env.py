@@ -21,7 +21,9 @@ def main():
         ("GeoPandas", "geopandas"),
         ("Rasterio", "rasterio"),
         ("Earth Engine API", "ee"),
-        ("PyYAML", "yaml")
+        ("PyYAML", "yaml"),
+        ("PyShepSeg", "pyshepseg"),
+        ("RasterStats", "rasterstats")
     ]
     
     success_count = 0

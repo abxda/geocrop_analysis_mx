@@ -4,17 +4,18 @@ channels:
   - defaults
 dependencies:
   - python=3.11
-  - numpy<2
   - gdal
   - geopandas
   - rasterio
   - rsgislib
   - earthengine-api
   - pandas
+  - numpy<2
   - scikit-learn
-  - pytorch  
   - pycaret
   - tpot
+  - pytorch
   - requests
   - pyyaml
-  - mamba  
+  - pyshepseg
+  - rasterstats
