@@ -1,13 +1,12 @@
 import geopandas as gpd
 import pandas as pd
-import rasterio
-import rasterio.features
-import numpy as np
 import os
 
-def label_segments(output_dir, data_dir, config):
-    """Performs a vector-based purity filter, adds integer class IDs, saves the labeled vector file, and then rasterizes it."""
-    print("\n--- Starting Segment Labeling (with Purity Filter) ---")
+def generate_label_map(output_dir, data_dir, config):
+    """Performs a vector-based purity filter and creates a CSV map
+    linking pure segment IDs to their text label and a numeric class ID.
+    """
+    print("\n--- Starting Label Mapping (Purity Filter) ---")
 
     # --- Define Paths ---
     segmentation_dir = os.path.join(output_dir, 'segmentation')
@@ -16,12 +15,10 @@ def label_segments(output_dir, data_dir, config):
 
     segmented_polygons_path = os.path.join(segmentation_dir, config['output_names']['segmented_polygons'])
     ground_truth_path = os.path.join(data_dir, 'labels', config['labels_file'])
-    labeled_polygons_path = os.path.join(labeling_dir, config['output_names']['labeled_polygons'])
-    rasterized_labels_path = os.path.join(labeling_dir, config['output_names']['rasterized_labels'])
-    reference_image_path = os.path.join(segmentation_dir, config['output_names']['segmentation_image'])
+    output_csv_path = os.path.join(labeling_dir, 'segment_label_map.csv')
 
-    if os.path.exists(labeled_polygons_path) and os.path.exists(rasterized_labels_path):
-        print(f"- Labeled outputs already exist. Skipping.")
+    if os.path.exists(output_csv_path):
+        print(f"- Label map file already exists: {os.path.basename(output_csv_path)}. Skipping.")
         return
 
     # --- 1. Vector-based Purity Filter ---
@@ -36,43 +33,23 @@ def label_segments(output_dir, data_dir, config):
     sjoined = gpd.sjoin(gdf_segments, gdf_labels, how='inner', predicate='intersects')
 
     label_field = config['labels_field_name']
-    labels_per_segment = sjoined.groupby('raster_val')[label_field].unique().apply(list)
-    
-    pure_segments_ids = labels_per_segment[labels_per_segment.str.len() == 1].index
-    pure_labels = labels_per_segment[labels_per_segment.str.len() == 1].str[0]
-    
+    labels_per_segment = sjoined.groupby('raster_val')[label_field].nunique()
+    pure_segments_ids = labels_per_segment[labels_per_segment == 1].index
     print(f"- Found {len(pure_segments_ids)} purely labeled segments.")
 
-    gdf_pure = gdf_segments[gdf_segments['raster_val'].isin(pure_segments_ids)].copy()
-    gdf_pure['label'] = gdf_pure['raster_val'].map(pure_labels)
+    pure_sjoined = sjoined[sjoined['raster_val'].isin(pure_segments_ids)]
+    label_map = pure_sjoined.groupby('raster_val')[label_field].first()
 
-    # --- 2. Create Integer Class ID and Save Labeled Shapefile ---
-    print("- Creating integer IDs for labels.")
-    gdf_pure['class_int'], class_names = pd.factorize(gdf_pure['label'])
-    gdf_pure['class_int'] += 1 # Start classes from 1, 0 is nodata
-    class_map = {i+1: name for i, name in enumerate(class_names)}
-    print(f"- Class mapping: {class_map}")
+    # --- 2. Create Final Mapping DataFrame ---
+    df_map = label_map.reset_index()
+    df_map.columns = ['segment_id', 'label']
 
-    print(f"- Saving pure labeled polygons (with integer class) to: {os.path.basename(labeled_polygons_path)}")
-    gdf_pure.to_file(labeled_polygons_path)
-
-    # --- 3. Rasterize Pure Labels ---
-    print(f"- Rasterizing pure polygons...")
-    with rasterio.open(reference_image_path) as ref_src:
-        ref_meta = ref_src.meta
-
-    shapes = ((geom, value) for geom, value in zip(gdf_pure.geometry, gdf_pure.class_int))
-    rasterized_labels = rasterio.features.rasterize(
-        shapes=shapes, 
-        out_shape=(ref_meta['height'], ref_meta['width']),
-        transform=ref_meta['transform'],
-        fill=0, # No-data value
-        dtype=rasterio.uint16
-    )
-
-    ref_meta.update(dtype=rasterio.uint16, count=1, nodata=0)
-    with rasterio.open(rasterized_labels_path, 'w', **ref_meta) as dst:
-        dst.write(rasterized_labels, 1)
+    # --- 3. Add Numeric Class ID ---
+    print("- Adding numeric class IDs for traceability.")
+    df_map['class_id'] = pd.factorize(df_map['label'])[0] + 1
     
-    print(f"- Saved rasterized pure labels to: {os.path.basename(rasterized_labels_path)}")
-    print("- Labeling phase complete.")
+    # --- 4. Save the Mapping to CSV ---
+    print(f"- Saving segment-to-label map to: {os.path.basename(output_csv_path)}")
+    df_map.to_csv(output_csv_path, index=False)
+
+    print("- Label mapping phase complete.")
