@@ -54,11 +54,7 @@ def label_segments(output_dir, data_dir, config):
     print(f"- Class mapping: {class_map}")
 
     print(f"- Saving pure labeled polygons (with integer class) to: {os.path.basename(labeled_polygons_path)}")
-    # Ensure integer columns are saved as such
-    schema = gpd.io.file.infer_schema(gdf_pure)
-    schema['properties']['raster_val'] = 'int64'
-    schema['properties']['class_int'] = 'int64'
-    gdf_pure.to_file(labeled_polygons_path, schema=schema)
+    gdf_pure.to_file(labeled_polygons_path)
 
     # --- 3. Rasterize Pure Labels ---
     print(f"- Rasterizing pure polygons...")
