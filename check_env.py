@@ -14,16 +14,15 @@ def main():
     """Runs validation checks for all critical libraries."""
     print("--- Running Environment Validation Check ---")
     
-    # List of libraries to check: (Display Name, Import Name)
     libraries_to_check = [
         ("GDAL", "osgeo.gdal"),
-        ("RSGISLIB", "rsgislib"),
         ("GeoPandas", "geopandas"),
         ("Rasterio", "rasterio"),
         ("Earth Engine API", "ee"),
-        ("PyYAML", "yaml"),
         ("PyShepSeg", "pyshepseg"),
-        ("RasterStats", "rasterstats")
+        ("ExactExtract", "exactextract"),
+        ("Scikit-Image", "skimage"),
+        ("Scikit-Learn", "sklearn")
     ]
     
     success_count = 0
@@ -35,8 +34,8 @@ def main():
     if success_count == len(libraries_to_check):
         print("All critical libraries are installed correctly. Your environment is ready!")
     else:
-        print("Some libraries are missing. Please review the [FAILURE] messages above and ensure the Conda environment was created successfully.")
-        sys.exit(1) # Exit with an error code if validation fails
+        print("Some libraries are missing. Please review the [FAILURE] messages above.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

@@ -7,15 +7,15 @@ dependencies:
   - gdal
   - geopandas
   - rasterio
-  - rsgislib
   - earthengine-api
   - pandas
   - numpy<2
   - scikit-learn
+  - scikit-image
   - pycaret
   - tpot
   - pytorch
   - requests
   - pyyaml
   - pyshepseg
-  - rasterstats
+  - exactextract
