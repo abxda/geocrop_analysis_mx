@@ -5,7 +5,7 @@ import rasterio.features
 import numpy as np
 import os
 
-def label_and_rasterize(output_dir, data_dir, config):
+def label_segments(output_dir, data_dir, config):
     """Performs a vector-based purity filter and then rasterizes the pure labels."""
     print("\n--- Starting Segment Labeling (with Purity Filter) ---")
 
