@@ -41,6 +41,11 @@ def run_segmentation(segmentation_params, composite_image_path, output_dir, outp
     # The result is an object containing the segmentation image as a numpy array
     segments_array = seg_result.segimg
 
+    # Convert array to a dtype supported by rasterio.features.shapes
+    if segments_array.dtype not in [rasterio.int16, rasterio.int32, rasterio.uint8, rasterio.uint16, rasterio.float32]:
+        print(f"- Converting segmentation array from {segments_array.dtype} to int32 for polygonizing.")
+        segments_array = segments_array.astype(rasterio.int32)
+
     # Save the segmentation result as a raster (GeoTIFF)
     print(f"- Saving segmentation raster to: {os.path.basename(clumps_path)}")
     with rasterio.open(
@@ -63,7 +68,10 @@ def run_segmentation(segmentation_params, composite_image_path, output_dir, outp
         for i, (s, v) 
         in enumerate(rasterio.features.shapes(segments_array, transform=transform)))
 
-    gdf = gpd.GeoDataFrame.from_features(list(results))
+    geoms = list(results)
+    gdf = gpd.GeoDataFrame.from_features(geoms)
+    # Cast raster_val to integer, as it represents segment IDs
+    gdf['raster_val'] = gdf['raster_val'].astype(int)
     gdf.set_crs(crs=crs, inplace=True)
     gdf.to_file(shapefile_path, driver='ESRI Shapefile')
     
