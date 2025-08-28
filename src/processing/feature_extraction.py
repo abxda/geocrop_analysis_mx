@@ -19,49 +19,17 @@ def _add_stats_for_image(image_path, clumps_path, band_offset, num_bands):
     
     rastergis.populate_rat_with_stats(image_path, clumps_path, band_stats)
 
-def extract_features_to_csv(config, clumps_path):
+def extract_features_to_csv(features_csv_path, clumps_path, image_paths):
     """Extracts features from all composites and saves them to a CSV file."""
     print("\n--- Starting Feature Extraction ---")
-
-    output_dir = os.path.join(config['output_dir'], config['aoi_name'])
-    features_csv_path = os.path.join(output_dir, config['output_names']['features_csv'])
 
     if os.path.exists(features_csv_path):
         print(f"- Features CSV already exists: {os.path.basename(features_csv_path)}")
         return
 
-    # --- Define image lists and parameters ---
-    # These could be further customized in config.yaml if needed
-    multispectral_dir = os.path.join(output_dir, 'multispectral')
-    radar_dir = os.path.join(output_dir, 'radar')
-    seg_dir = os.path.join(output_dir, 'segmentation')
-
-    # List of images to process
-    # The order is important for consistent band numbering
-    images_to_process = []
-    # 1. Main segmentation composite
-    images_to_process.append({
-        'path': os.path.join(seg_dir, config['output_names']['segmentation_image']),
-        'num_bands': 13 # As defined in segmentation_params
-    })
-    # 2. Monthly multispectral composites
-    for start_date, _ in config['date_ranges']:
-        month_str = start_date[:7]
-        images_to_process.append({
-            'path': os.path.join(multispectral_dir, f"multispectral_composite_{month_str}.tif"),
-            'num_bands': 13
-        })
-    # 3. Monthly radar composites
-    for start_date, _ in config['date_ranges']:
-        month_str = start_date[:7]
-        images_to_process.append({
-            'path': os.path.join(radar_dir, f"radar_composite_{month_str}.tif"),
-            'num_bands': 3 # VV, VH, RVI
-        })
-
     # --- Iterate and extract stats ---
     band_offset = 0
-    for image_info in images_to_process:
+    for image_info in image_paths:
         if os.path.exists(image_info['path']):
             _add_stats_for_image(image_info['path'], clumps_path, band_offset, image_info['num_bands'])
             band_offset += image_info['num_bands']
