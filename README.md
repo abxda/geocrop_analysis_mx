@@ -18,7 +18,7 @@ This project has complex dependencies (`gdal`, `rsgislib`). Following these step
     ```
 6.  **Activate the Environment**: You must activate the environment every time you want to use the project.
     ```bash
-    conda activate geocrop_analysis_mx
+    mamba activate geocrop_analysis_mx
     ```
 7.  **Validate the Environment**: Before proceeding, run this script to ensure all critical libraries are installed and accessible.
     ```bash
