@@ -28,14 +28,32 @@ def run_gdal_merge(tile_paths, output_image_path):
         return
     tile_dir = os.path.dirname(tile_paths[0])
     _log(f"- Merging {len(tile_paths)} tiles from {os.path.basename(tile_dir)} into {os.path.basename(output_image_path)}")
-    gdal_merge_script = os.path.join(os.path.dirname(sys.executable), 'Scripts', 'gdal_merge.py')
+
+    # Determine the correct path to gdal_merge.py based on the OS
+    if sys.platform == "win32":
+        gdal_merge_script = os.path.join(os.path.dirname(sys.executable), 'Scripts', 'gdal_merge.py')
+    else:
+        gdal_merge_script = os.path.join(os.path.dirname(sys.executable), 'gdal_merge.py')
+
+    # Check if the script exists before trying to run it
+    if not os.path.exists(gdal_merge_script):
+        _log(f"- GDAL Merge FAILED. Could not find gdal_merge.py at the expected location: {gdal_merge_script}")
+        # As a fallback, try to find it in the system PATH
+        gdal_merge_script = shutil.which("gdal_merge.py")
+        if not gdal_merge_script:
+            _log("- GDAL Merge FAILED. 'gdal_merge.py' not found in system PATH either.")
+            _log(f"- Temporary tiles kept for inspection in: {tile_dir}")
+            return
+
     command = [sys.executable, gdal_merge_script, '-o', output_image_path, '-of', 'GTiff', '-co', 'COMPRESS=LZW'] + tile_paths
     try:
         subprocess.run(command, check=True, capture_output=True, text=True)
         _log("- Merge successful.")
         shutil.rmtree(tile_dir)
     except subprocess.CalledProcessError as e:
-        _log(f"- GDAL Merge FAILED. Error: {e.stderr}")
+        # Provide a more informative error message
+        error_message = e.stderr if e.stderr else str(e)
+        _log(f"- GDAL Merge FAILED. Error: {error_message.strip()}")
         _log(f"- Temporary tiles kept for inspection in: {tile_dir}")
 
 def show_config(config_path, config_data):
