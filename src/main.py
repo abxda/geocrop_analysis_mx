@@ -169,13 +169,22 @@ def main():
     if args.phase == 'label' or args.phase == 'full_run':
         phase_start_time = time.time()
         _log("Executing PHASE: Label")
-        labeling.label_segments(output_dir, data_dir, config)
+        labeling.generate_label_map(output_dir, data_dir, config)
         _log(f"PHASE 'Label' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
 
     if args.phase == 'extract' or args.phase == 'full_run':
         phase_start_time = time.time()
         _log("Executing PHASE: Extract Features")
-        feature_extraction.extract_features(output_dir, data_dir, config)
+        # Construct the list of images for feature extraction
+        image_list = []
+        image_list.append({'path': os.path.join(output_dir, 'segmentation', config['output_names']['segmentation_image']), 'prefix': 'gm_'})
+        monthly_ranges = _generate_monthly_ranges(config['study_period']['start_date'], config['study_period']['end_date'])
+        for start, _ in monthly_ranges:
+            month_str = start[:7]
+            image_list.append({'path': os.path.join(output_dir, 'multispectral', month_str, f"multispectral_{month_str}.tif"), 'prefix': f'ms_{month_str.replace("-", "")}_'})
+            image_list.append({'path': os.path.join(output_dir, 'radar', month_str, f"radar_{month_str}.tif"), 'prefix': f'sar_{month_str.replace("-", "")}_'})
+        
+        feature_extraction.extract_features(output_dir, config, image_list)
         _log(f"PHASE 'Extract Features' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
 
     if args.phase == 'full_run':
