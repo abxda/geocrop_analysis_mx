@@ -4,7 +4,29 @@ This project provides a complete, modular pipeline for crop classification using
 
 ## Installation
 
-(The installation guide remains the same. First, install Miniforge, then create and activate the Conda environment as described previously.)
+This project has complex dependencies (`gdal`, `rsgislib`). Following these steps precisely is crucial for ensuring the environment is set up correctly.
+
+1.  **Install Miniforge**: Download and install from the [Miniforge GitHub releases page](https://github.com/conda-forge/miniforge/releases).
+2.  **Open the Miniforge Prompt**: Open the "Miniforge Prompt" (Windows) or your terminal (macOS/Linux).
+3.  **Clone the Project**: `git clone https://github.com/abxda/geocrop_analysis_mx.git`
+4.  **Create Project Directories**: Outside the project folder, create the `data` and `outputs` directories.
+5.  **Create the Conda Environment**: Navigate into the `geocrop_analysis_mx` folder. This single command will create the environment and automatically configure the necessary PATH variables for Windows compatibility.
+    ```bash
+    # We recommend using Mamba for a significantly faster installation
+    conda install mamba -n base -c conda-forge
+    mamba env create -f environment.yml
+    ```
+6.  **Activate the Environment**: You must activate the environment every time you want to use the project.
+    ```bash
+    conda activate geocrop_analysis_mx
+    ```
+7.  **Validate the Environment**: Before proceeding, run this script to ensure all critical libraries are installed and accessible.
+    ```bash
+    python check_env.py
+    ```
+    *You should see `[SUCCESS]` messages for all libraries. If not, please review the installation steps.*
+
+8.  **Authenticate Google Earth Engine**: Run `earthengine authenticate` if it's your first time.
 
 ## Tutorial: Running the Test Case (Step-by-Step)
 
