@@ -104,3 +104,54 @@ python src/main.py --config config.test.yaml --phase cleanup_tiles
     ```bash
     python src/main.py --config config.my_region.yaml
     ```
+
+## Predicting a New Year
+
+This pipeline includes a powerful "prediction mode" that allows you to use a model trained on one time period to predict the classification for a completely new year.
+
+### 1. Configuration
+
+First, specify the new year you want to predict in your `config.yaml` or `config.test.yaml` file by adding the `prediction_year` key:
+
+```yaml
+# In your config file...
+prediction_year: 2019
+```
+
+### 2. How it Works
+
+When you run the pipeline with the `--prediction-year` flag, it automatically:
+- Creates a new subdirectory for the results (e.g., `outputs/your_aoi/prediction_2019/`) to keep them separate.
+- Shifts the `study_period` to the new year, keeping the same months and days.
+- Skips the `label` and `train` phases.
+- Uses the **original trained model** for the final prediction.
+
+### 3. Running the Prediction
+
+You can run the prediction workflow step-by-step to inspect the intermediate results, or all at once.
+
+**Step-by-Step Execution:**
+
+```bash
+# 1. Download data for the new year
+python src/main.py --config config.test.yaml --phase download --prediction-year 2019
+
+# 2. Segment the new year's imagery
+python src/main.py --config config.test.yaml --phase segment --prediction-year 2019
+
+# 3. Extract features for the new year (with normalized names)
+python src/main.py --config config.test.yaml --phase extract --prediction-year 2019
+
+# 4. Predict and generate the final map using the original model
+python src/main.py --config config.test.yaml --phase predict --prediction-year 2019
+```
+
+**Full Prediction Run:**
+
+To execute all the prediction steps at once, use the `predict_full_run` phase:
+
+```bash
+python src/main.py --config config.test.yaml --phase predict_full_run --prediction-year 2019
+```
+
+The final map will be saved as a GeoPackage file in the `outputs/your_aoi/prediction_2019/modeling/` directory.
