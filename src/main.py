@@ -13,7 +13,7 @@ import sys
 
 from config import load_config
 from data_download import gee_utils, multispectral, radar
-from processing import segmentation, labeling, feature_extraction
+from processing import segmentation, labeling, feature_extraction, modeling, mapping
 
 def _log(message):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}")
@@ -129,7 +129,7 @@ def run_download_phase(config, study_area, output_dir):
 def main():
     parser = argparse.ArgumentParser(description="GeoCrop Analysis Pipeline")
     parser.add_argument('--config', default='config.yaml', help='Configuration file to use')
-    parser.add_argument('--phase', choices=['show_config', 'setup_test', 'download', 'segment', 'label', 'extract', 'cleanup_tiles', 'full_run'], default='full_run', help='The specific pipeline phase to run')
+    parser.add_argument('--phase', choices=['show_config', 'setup_test', 'download', 'segment', 'label', 'extract', 'train', 'predict', 'cleanup_tiles', 'full_run'], default='full_run', help='The specific pipeline phase to run')
     args = parser.parse_args()
 
     _log(f"--- Geocrop Analysis Pipeline Initializing --- Config: {args.config}, Phase: {args.phase} ---")
@@ -175,17 +175,20 @@ def main():
     if args.phase == 'extract' or args.phase == 'full_run':
         phase_start_time = time.time()
         _log("Executing PHASE: Extract Features")
-        # Construct the list of images for feature extraction
-        image_list = []
-        image_list.append({'path': os.path.join(output_dir, 'segmentation', config['output_names']['segmentation_image']), 'prefix': 'gm_'})
-        monthly_ranges = _generate_monthly_ranges(config['study_period']['start_date'], config['study_period']['end_date'])
-        for start, _ in monthly_ranges:
-            month_str = start[:7]
-            image_list.append({'path': os.path.join(output_dir, 'multispectral', month_str, f"multispectral_{month_str}.tif"), 'prefix': f'ms_{month_str.replace("-", "")}_'})
-            image_list.append({'path': os.path.join(output_dir, 'radar', month_str, f"radar_{month_str}.tif"), 'prefix': f'sar_{month_str.replace("-", "")}_'})
-        
-        feature_extraction.extract_features(output_dir, config, image_list)
+        feature_extraction.extract_features(output_dir, data_dir, config)
         _log(f"PHASE 'Extract Features' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
+
+    if args.phase == 'train' or args.phase == 'full_run':
+        phase_start_time = time.time()
+        _log("Executing PHASE: Train Model")
+        modeling.train_model(config, output_dir)
+        _log(f"PHASE 'Train Model' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
+
+    if args.phase == 'predict' or args.phase == 'full_run':
+        phase_start_time = time.time()
+        _log("Executing PHASE: Predict and Generate Map")
+        mapping.generate_map(config, output_dir)
+        _log(f"PHASE 'Predict and Generate Map' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
 
     if args.phase == 'full_run':
         _log(f"--- Pipeline Finished --- Total Duration: {time.time() - pipeline_start_time:.2f} seconds ---")

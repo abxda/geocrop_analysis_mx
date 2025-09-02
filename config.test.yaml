@@ -30,3 +30,17 @@ output_names:
   labeled_polygons: "labeled_polygons_test.shp"
   rasterized_labels: "rasterized_labels_test.tif"
   features_csv: "features_test.csv"
+
+# -----------------------------------------------------------------------------
+# Modeling Parameters
+# -----------------------------------------------------------------------------
+modeling_params:
+  test_size: 0.3
+  random_state: 42
+  balance_classes: true
+  max_samples_per_class: 500
+  tpot_generations: 5
+  tpot_population_size: 20
+  output_model_name: "tpot_model_test.pkl"
+  output_prediction_name: "predictions_test.csv"
+  output_map_name: "predicted_map_test.gpkg"

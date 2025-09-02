@@ -48,4 +48,18 @@ output_names:
   segmented_polygons: "segmented_polygons.shp"
   labeled_polygons: "labeled_polygons.shp"
   rasterized_labels: "rasterized_labels.tif"
-  features_csv: "features.csv"
+  features_file: "features.csv"
+
+# -----------------------------------------------------------------------------
+# Modeling Parameters
+# -----------------------------------------------------------------------------
+modeling_params:
+  test_size: 0.3
+  random_state: 42
+  balance_classes: true
+  max_samples_per_class: 500
+  tpot_generations: 5
+  tpot_population_size: 20
+  output_model_name: "tpot_model.pkl"
+  output_prediction_name: "predictions.csv"
+  output_map_name: "predicted_map.gpkg"

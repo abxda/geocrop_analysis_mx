@@ -13,7 +13,7 @@ dependencies:
   - scikit-learn
   - scikit-image
   - pycaret
-  - tpot
+  - tpot==0.12.2
   - pytorch
   - requests
   - pyyaml
