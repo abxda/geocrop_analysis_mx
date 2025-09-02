@@ -8,14 +8,22 @@ from datetime import datetime
 def _log(message):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}")
 
-def generate_map(config, output_dir):
+def generate_map(config, output_dir, model_path=None):
     _log("--- Executing PHASE: Predict and Generate Map ---")
 
-    # --- Define Paths ---
+    # --- Define Paths and create directories ---
     modeling_dir = os.path.join(output_dir, 'modeling')
-    model_path = os.path.join(modeling_dir, config['modeling_params']['output_model_name'])
+    os.makedirs(modeling_dir, exist_ok=True)
+
+    # If an external model path is not provided, use the one in the current output directory
+    if model_path is None:
+        model_path = os.path.join(modeling_dir, config['modeling_params']['output_model_name'])
+    
     features_path = os.path.join(output_dir, config['output_names']['features_csv'])
-    label_map_path = os.path.join(output_dir, 'labeling', 'segment_label_map.csv')
+    # The label map is needed to map class IDs back to text labels
+    # In prediction mode, we need to get it from the original output directory
+    original_output_dir = os.path.dirname(output_dir) if 'prediction_' in os.path.basename(output_dir) else output_dir
+    label_map_path = os.path.join(original_output_dir, 'labeling', 'segment_label_map.csv')
     polygons_path = os.path.join(output_dir, 'segmentation', config['output_names']['segmented_polygons'])
     
     predictions_csv_path = os.path.join(modeling_dir, config['modeling_params']['output_prediction_name'])
@@ -42,12 +50,10 @@ def generate_map(config, output_dir):
     # --- Predict on Full Dataset ---
     _log("Generating predictions for all segments...")
     # Prepare features for prediction (drop non-feature columns)
-    # Ensure 'klass' is handled correctly if it exists
     cols_to_drop = ['segment_id', 'label', 'class_id']
     if 'klass' in features_df.columns:
         cols_to_drop.append('klass')
     
-    # Only drop columns that actually exist in the dataframe
     cols_to_drop_existing = [col for col in cols_to_drop if col in features_df.columns]
     features_to_predict = features_df.drop(columns=cols_to_drop_existing)
     
@@ -57,13 +63,10 @@ def generate_map(config, output_dir):
 
     # --- Format Results ---
     _log("Formatting prediction results...")
-    # Create a mapping from numeric class_id to text label
     class_id_to_label = dict(zip(label_map_df['class_id'], label_map_df['label']))
 
-    # Get the probability of the predicted class
     confidence = np.max(predictions_proba, axis=1)
 
-    # Create results DataFrame
     results_df = pd.DataFrame({
         'segment_id': features_df['segment_id'],
         'class_id': predictions_numeric,
@@ -79,8 +82,6 @@ def generate_map(config, output_dir):
     _log(f"Loading polygons from {polygons_path}")
     polygons_gdf = gpd.read_file(polygons_path)
 
-    # Merge predictions with polygons
-    # The segmented shapefile has a 'raster_val' column corresponding to 'segment_id'
     merged_gdf = polygons_gdf.merge(results_df, left_on='raster_val', right_on='segment_id')
 
     _log(f"Saving final predicted map to {output_map_path}")

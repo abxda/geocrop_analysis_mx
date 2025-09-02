@@ -44,3 +44,8 @@ modeling_params:
   output_model_name: "tpot_model_test.pkl"
   output_prediction_name: "predictions_test.csv"
   output_map_name: "predicted_map_test.gpkg"
+
+# -----------------------------------------------------------------------------
+# Prediction for a New Year
+# -----------------------------------------------------------------------------
+prediction_year: 2019
