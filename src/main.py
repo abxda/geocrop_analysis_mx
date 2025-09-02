@@ -14,7 +14,7 @@ from dateutil.relativedelta import relativedelta
 
 from config import load_config
 from data_download import gee_utils, multispectral, radar
-from processing import segmentation, labeling, feature_extraction, modeling, mapping
+from processing import segmentation, labeling, feature_extraction, modeling, mapping, compression
 
 def _log(message):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}")
@@ -59,6 +59,9 @@ def run_setup_test_phase(config):
     _log("Setting up test environment...")
     aoi_identifier = os.path.splitext(config['aoi_file'])[0]
     source_dir = os.path.join(os.path.dirname(__file__), '..', 'test_data')
+    output_dir = os.path.join(config['output_dir'], aoi_identifier)
+
+    # Copy AOI and labels
     dest_aoi_dir = os.path.join(config['data_dir'], aoi_identifier)
     os.makedirs(os.path.join(dest_aoi_dir, 'labels'), exist_ok=True)
     source_aoi_path = os.path.join(source_dir, config['aoi_file'])
@@ -69,6 +72,18 @@ def run_setup_test_phase(config):
     dest_labels_path = os.path.join(dest_aoi_dir, 'labels', config['labels_file'])
     _log(f"Copying {config['labels_file']} to {dest_labels_path}")
     shutil.copy(source_labels_path, dest_labels_path)
+
+    # Check for pre-processed mosaics and copy them to the output directory
+    preprocessed_dir = os.path.join(source_dir, 'preprocessed_mosaics')
+    if os.path.exists(preprocessed_dir):
+        _log("- Found pre-processed mosaics. Copying to output directory to enable offline run...")
+        # Use copytree to recursively copy the entire directory structure
+        if os.path.exists(output_dir):
+            shutil.rmtree(output_dir)
+        shutil.copytree(preprocessed_dir, output_dir)
+    else:
+        _log("- No pre-processed mosaics found. Pipeline will run GEE download if needed.")
+
     _log("Test data setup complete.")
 
 def run_cleanup_phase(output_dir):
@@ -124,7 +139,7 @@ def run_download_phase(config, study_area, output_dir):
 def main():
     parser = argparse.ArgumentParser(description="GeoCrop Analysis Pipeline")
     parser.add_argument('--config', default='config.yaml', help='Configuration file to use')
-    parser.add_argument('--phase', choices=['show_config', 'setup_test', 'download', 'segment', 'label', 'extract', 'train', 'predict', 'cleanup_tiles', 'full_run', 'predict_full_run'], default='full_run', help='The specific pipeline phase to run')
+    parser.add_argument('--phase', choices=['show_config', 'setup_test', 'download', 'segment', 'label', 'extract', 'train', 'predict', 'cleanup_tiles', 'full_run', 'predict_full_run', 'compress_mosaics'], default='full_run', help='The specific pipeline phase to run')
     parser.add_argument('--prediction-year', type=int, help='The year to run predictions for. Activates prediction mode.')
     args = parser.parse_args()
 
@@ -157,11 +172,12 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
 
     # --- Phase Execution ---
-    if args.phase in ['show_config', 'setup_test', 'cleanup_tiles']:
+    if args.phase in ['show_config', 'setup_test', 'cleanup_tiles', 'compress_mosaics']:
         # These phases are not affected by prediction mode
         if args.phase == 'show_config': show_config(args.config, config)
         if args.phase == 'setup_test': run_setup_test_phase(config)
         if args.phase == 'cleanup_tiles': run_cleanup_phase(output_dir)
+        if args.phase == 'compress_mosaics': compression.run_compression_phase(output_dir, config)
         return
 
     pipeline_start_time = time.time()
