@@ -1,157 +1,128 @@
-# GeoCrop Analysis MX
+# **GeoCrop Analysis MX**
 
-This project provides a complete, modular pipeline for crop classification using satellite imagery from Google Earth Engine. It is designed to be configurable, extensible, and easy to use for different regions and time periods.
+This project provides a complete and modular pipeline for crop classification using satellite imagery from Google Earth Engine. It is designed to be configurable, extensible, and easy to use for different regions and time periods.
 
-## Installation
+## **Installation**
 
-This project has complex dependencies (`gdal`, `rsgislib`). Following these steps precisely is crucial for ensuring the environment is set up correctly.
+This project has complex dependencies (gdal, geopandas, etc.). Following these steps precisely is essential for ensuring the environment is set up correctly.
 
-1.  **Install Miniforge**: Download and install from the [Miniforge GitHub releases page](https://github.com/conda-forge/miniforge/releases).
-2.  **Open the Miniforge Prompt**: Open the "Miniforge Prompt" (Windows) or your terminal (macOS/Linux).
-3.  **Clone the Project**: `git clone https://github.com/abxda/geocrop_analysis_mx.git`
-4.  **Create Project Directories**: Outside the project folder, create the `data` and `outputs` directories.
-5.  **Create the Conda Environment**: Navigate into the `geocrop_analysis_mx` folder. This single command will create the environment and automatically configure the necessary PATH variables for Windows compatibility.
-    ```bash
-    # We recommend using Mamba for a significantly faster installation
-    conda install mamba -n base -c conda-forge
-    mamba env create -f environment.yml
-    ```
-6.  **Activate the Environment**: You must activate the environment every time you want to use the project.
-    ```bash
-    mamba activate geocrop_analysis_mx
-    ```
-7.  **Validate the Environment**: Before proceeding, run this script to ensure all critical libraries are installed and accessible.
-    ```bash
-    python check_env.py
-    ```
-    *You should see `[SUCCESS]` messages for all libraries. If not, please review the installation steps.*
+1. **Install Conda**: We recommend installing **Miniforge**. If you don't have it yet, download and install Miniforge from the [Miniforge GitHub releases page](https://github.com/conda-forge/miniforge/releases).  
+2. **Open the Conda Terminal**: Open "Miniforge Prompt" (on Windows) or your terminal (macOS/Linux).  
+3. **Clone the Project**: git clone https://github.com/abxda/geocrop\_analysis\_mx.git  
+4. **Create Project Directories**: Outside the project folder, create the data and outputs directories. Your folder structure should look like this:  
+   \- /path/to/your/projects/  
+     |- geocrop\_analysis\_mx/  \<-- The cloned repository  
+     |- data/                 \<-- Empty folder  
+     |- outputs/              \<-- Empty folder
 
-8.  **Authenticate Google Earth Engine**: Run `earthengine authenticate` if it's your first time.
+5. **Create the Conda Environment**: Navigate into the geocrop\_analysis\_mx folder. This command will create the environment with all the necessary dependencies.  
+   conda env create \-f environment.yml
 
-## Tutorial: Running the Test Case (Step-by-Step)
+6. **Activate the Environment**: You must activate the environment every time you want to use the project.  
+   conda activate geocrop\_analysis\_mx
 
-This tutorial will guide you through running the included test case one phase at a time. This is the best way to understand the pipeline and verify that your installation is correct.
+7. **Validate the Environment**: Before proceeding, run this script to ensure all critical libraries are installed and accessible.  
+   python check\_env.py
 
-**Prerequisite**: Ensure your Conda environment (`geocrop_analysis_mx`) is activated.
+   *You should see \[SUCCESS\] messages for all libraries. If not, please review the installation steps.*  
+8. **Authenticate Google Earth Engine**: Run earthengine authenticate if it's your first time using the platform on this machine. Follow the instructions in your browser.
 
-### Step 0: Prepare Test Data
+## **Tutorial: Running the Test Case (Step-by-Step)**
 
-This command copies the sample files into the correct `data/` directory. **It only needs to be run once.**
+This tutorial will guide you through running the included test case, phase by phase. This is the best way to understand the pipeline and verify that your installation is correct.
 
-```bash
-python src/main.py --config config.test.yaml --phase setup_test
-```
+**Prerequisite**: Ensure your Conda environment (geocrop\_analysis\_mx) is activated.
 
-### Step 1: Download Imagery
+### **Step 0: Prepare Test Data**
 
-This phase connects to Google Earth Engine and downloads all the required images (the main composite and monthly composites for the period defined in `config.test.yaml`).
+This command copies the example files into the correct data/ directory and prepares the pre-processed mosaics to run the tutorial without needing to download imagery. **It only needs to be run once.**
 
-```bash
-python src/main.py --config config.test.yaml --phase download
-```
+python src/main.py \--config config.test.yaml \--phase setup\_test
 
-### Step 2: Segment the Image
+### **Step 1: Segment the Image**
 
-This phase takes the main composite image and divides it into thousands of small, homogenous polygons (segments).
+This phase takes the main composite image and divides it into thousands of small, homogeneous polygons (segments).
 
-```bash
-python src/main.py --config config.test.yaml --phase segment
-```
+python src/main.py \--config config.test.yaml \--phase segment
 
-### Step 3: Label the Segments
+### **Step 2: Label the Segments**
 
-This phase assigns a crop label to each segment based on the provided ground-truth data and creates a rasterized version of the labels.
+This phase assigns a crop label to each segment based on the provided ground-truth data.
 
-```bash
-python src/main.py --config config.test.yaml --phase label
-```
+python src/main.py \--config config.test.yaml \--phase label
 
-### Step 4: Extract Features
+### **Step 3: Extract Features**
 
-This is the final processing step. It calculates all the statistical features for each segment from all the downloaded images and saves the result to a CSV file.
+This is an essential step. It calculates all the statistical features (spectral, texture, etc.) for each segment from all the satellite images and saves the result to a CSV file.
 
-```bash
-python src/main.py --config config.test.yaml --phase extract
-```
+python src/main.py \--config config.test.yaml \--phase extract
 
-### Step 5: Verify the Output
+### **Step 4: Train the Classification Model**
 
-After a successful run, the main output is the final features file, ready for analysis or machine learning:
+With the features already extracted, this command uses the labeled data to train a machine learning model using TPOT, which automatically searches for the best pipeline. The trained model is saved as a .pkl file.
 
--   `outputs/aoi_yaqui_test/features_test.csv`
+python src/main.py \--config config.test.yaml \--phase train
 
-### (Optional) Step 6: Clean Up Temporary Files
+### **Step 5: Generate Predictions and the Final Map**
 
-Once you have verified that everything works, you can run this command to delete the intermediate tile folders (`*_tiles`) created during the download process.
+This phase uses the model trained in the previous step to predict the crop type for **all** segments (even those without an initial label). The final result is a GeoPackage (.gpkg) file containing the crop classification map.
 
-```bash
-python src/main.py --config config.test.yaml --phase cleanup_tiles
-```
+python src/main.py \--config config.test.yaml \--phase predict
 
-## Advanced Usage
+### **Step 6: Verify the Results**
 
--   **End-to-End Run (`full_run`):** To execute all steps (Download to Extract) at once, use the `full_run` phase.
-    ```bash
-    python src/main.py --config config.test.yaml --phase full_run
-    ```
+After a successful run, the main products ready for analysis are:
 
--   **Viewing Configuration (`show_config`):** To quickly view the active settings from a configuration file.
-    ```bash
-    python src/main.py --config config.test.yaml --phase show_config
-    ```
+* **Trained Model**: outputs/aoi\_yaqui\_test/modeling/tpot\_model\_test.pkl  
+* **Classification Report**: outputs/aoi\_yaqui\_test/modeling/classification\_report.txt  
+* **Final Crop Map**: outputs/aoi\_yaqui\_test/modeling/predicted\_map\_test.gpkg
 
--   **Using Your Own Data:** Prepare your data and a custom configuration file (`config.my_region.yaml`), then run the pipeline.
-    ```bash
-    python src/main.py --config config.my_region.yaml
-    ```
+You can open the .gpkg file in GIS software like QGIS to visualize the crop classification map.
 
-## Predicting a New Year
+## **Advanced Usage**
 
-This pipeline includes a powerful "prediction mode" that allows you to use a model trained on one time period to predict the classification for a completely new year.
+* **Full Run (full\_run):** To execute all steps (from download to prediction) at once. *Note: requires active GEE authentication.*  
+  \# This will download real data and may take some time  
+  python src/main.py \--config config.test.yaml \--phase full\_run
 
-### 1. Configuration
+* **View Configuration (show\_config):** To quickly view the active settings from a configuration file.  
+  python src/main.py \--config config.test.yaml \--phase show\_config
 
-First, specify the new year you want to predict in your `config.yaml` or `config.test.yaml` file by adding the `prediction_year` key:
+* **Using Your Own Data:** Prepare your own data (AOI, labels) and a custom configuration file (config.my\_region.yaml), then run the pipeline.  
+  python src/main.py \--config config.my\_region.yaml \--phase full\_run
 
-```yaml
-# In your config file...
-prediction_year: 2019
-```
+## **Prediction for a New Year**
 
-### 2. How it Works
+The pipeline includes a powerful "prediction mode" to use an already trained model to classify a completely new year.
 
-When you run the pipeline with the `--prediction-year` flag, it automatically:
-- Creates a new subdirectory for the results (e.g., `outputs/your_aoi/prediction_2019/`) to keep them separate.
-- Shifts the `study_period` to the new year, keeping the same months and days.
-- Skips the `label` and `train` phases.
-- Uses the **original trained model** for the final prediction.
+### **How it Works**
 
-### 3. Running the Prediction
+When you run the pipeline with the \--prediction-year flag, it automatically:
 
-You can run the prediction workflow step-by-step to inspect the intermediate results, or all at once.
+* Creates a new subdirectory for the results (e.g., outputs/aoi\_yaqui\_test/prediction\_2019/).  
+* Shifts the study\_period to the new year, keeping the same months and days.  
+* Skips the label and train phases.  
+* Uses the **original trained model** for the final prediction.
 
-**Step-by-Step Execution:**
+### **Running the Prediction for a New Year**
 
-```bash
-# 1. Download data for the new year
-python src/main.py --config config.test.yaml --phase download --prediction-year 2019
+You can run the prediction workflow step-by-step or all at once.
 
-# 2. Segment the new year's imagery
-python src/main.py --config config.test.yaml --phase segment --prediction-year 2019
+**Step-by-Step Execution (e.g., for the year 2019):**
 
-# 3. Extract features for the new year (with normalized names)
-python src/main.py --config config.test.yaml --phase extract --prediction-year 2019
+\# 1\. Segment the new year's image (assuming data is already downloaded)  
+python src/main.py \--config config.test.yaml \--phase segment \--prediction-year 2019
 
-# 4. Predict and generate the final map using the original model
-python src/main.py --config config.test.yaml --phase predict --prediction-year 2019
-```
+\# 2\. Extract features for the new year  
+python src/main.py \--config config.test.yaml \--phase extract \--prediction-year 2019
+
+\# 3\. Predict and generate the final map using the original model  
+python src/main.py \--config config.test.yaml \--phase predict \--prediction-year 2019
 
 **Full Prediction Run:**
 
-To execute all the prediction steps at once, use the `predict_full_run` phase:
+To execute all prediction steps at once (download, segmentation, extraction, and prediction), use the predict\_full\_run phase:
 
-```bash
-python src/main.py --config config.test.yaml --phase predict_full_run --prediction-year 2019
-```
+python src/main.py \--config config.test.yaml \--phase predict\_full\_run \--prediction-year 2019
 
-The final map will be saved as a GeoPackage file in the `outputs/your_aoi/prediction_2019/modeling/` directory.
+The final map will be saved as a GeoPackage file in the outputs/aoi\_yaqui\_test/prediction\_2019/modeling/ directory.
