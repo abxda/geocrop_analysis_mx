@@ -8,7 +8,7 @@ This project has complex dependencies (gdal, geopandas, etc.). Following these s
 
 1. **Install Conda**: We recommend installing **Miniforge**. If you don't have it yet, download and install Miniforge from the [Miniforge GitHub releases page](https://github.com/conda-forge/miniforge/releases).  
 2. **Open the Conda Terminal**: Open "Miniforge Prompt" (on Windows) or your terminal (macOS/Linux).  
-3. **Clone the Project**: git clone https://github.com/abxda/geocrop\_analysis\_mx.git  
+3. **Clone the Project**: git clone https://github.com/abxda/geocrop_analysis_mx  
 4. **Create Project Directories**: Outside the project folder, create the data and outputs directories. Your folder structure should look like this:  
   \- /path/to/your/projects/  
      |- geocrop\_analysis\_mx/  \<-- The cloned repository  
