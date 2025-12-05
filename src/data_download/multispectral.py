@@ -57,7 +57,7 @@ def _download_tile(image, region_coords, scale, file_path):
     _log(f"  - FAILED after {max_retries} attempts: {os.path.basename(file_path)}")
     return False
 
-def download_composite(image, study_area, output_path, max_dim=0.2, scale=30):
+def download_composite(image, study_area, output_path, max_dim=0.05, scale=30):
     """Downloads a composite image, splitting it into individually validated tiles."""
     if os.path.exists(output_path):
         _log(f"- Final composite already exists: {os.path.basename(output_path)}. Skipping download.")
