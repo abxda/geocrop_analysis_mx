@@ -2,6 +2,8 @@
 
 This project provides a complete and modular pipeline for crop classification using satellite imagery from Google Earth Engine. It is designed to be configurable, extensible, and easy to use for different regions and time periods.
 
+> **First time here?** Follow the end-to-end walk-through in [TUTORIAL.md](TUTORIAL.md) (or [TUTORIAL.es.md](TUTORIAL.es.md) in Spanish). It reproduces the bundled offline Yaqui Valley exercise from scratch in about 15 minutes.
+
 ## **Installation**
 
 This project has complex dependencies (gdal, geopandas, etc.). Following these steps precisely is essential for ensuring the environment is set up correctly.

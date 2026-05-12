@@ -10,7 +10,7 @@ dependencies:
   - earthengine-api
   - pandas
   - numpy<2
-  - scikit-learn
+  - scikit-learn<1.6
   - scikit-image
   - pycaret
   - tpot==0.12.2
