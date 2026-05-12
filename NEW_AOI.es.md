@@ -26,7 +26,7 @@ Lo justo para seguir la guía:
 | Término | Qué es | Por qué importa |
 |---|---|---|
 | **AOI** (Área de Interés) | Un único polígono que describe la región a clasificar. | Define qué descarga GEE y dónde se hace la segmentación. |
-| **Etiquetas (verdad-en-terreno)** | Polígonos confiables, cada uno marcado con la clase de cultivo. | El pipeline aprende de ellos para etiquetar el resto del AOI. |
+| **Etiquetas (verdad-en-terreno)** | Un vector de **puntos**, cada uno marcado con la clase observada en ese sitio (GPS de campo, foto-interpretación, parcelas conocidas). Polígonos también funcionan pero los puntos son el insumo esperado. | Los puntos siembran a los segmentos con clases; la segmentación se encarga de "expandir" cada punto al polígono homogéneo que lo rodea. |
 | **Segmento** | Un polígono homogéneo producido por el algoritmo Shepherd. | Es la unidad básica de clasificación — a cada segmento se le asigna una clase. |
 | **Composite** | Una imagen multibanda que resume el período de estudio (mediana geométrica de las escenas HLS). | Es sobre la que corre la segmentación; más limpia y menos nublada que cualquier escena individual. |
 | **Features** | Estadísticas por segmento (mean/stdev/min/max/count/sum) de todas las bandas de todos los mosaicos mensuales. | Son la entrada al clasificador. |
@@ -40,7 +40,7 @@ Antes de tocar el pipeline, reúne esto:
 
 - **Una instalación funcional** de GeoCrop Analysis MX. Si aún no la tienes, termina primero [TUTORIAL.es.md](TUTORIAL.es.md) — la corrida de prueba fallará rápido si algo está roto.
 - **Un archivo vectorial de AOI** (GeoPackage `.gpkg` recomendado; Shapefile también funciona). Un solo polígono. Cualquier CRS proyectado o geográfico — el pipeline reproyecta al vuelo, pero si tienes opción, usa WGS84 (`EPSG:4326`) porque es lo que usa GEE.
-- **Un archivo vectorial de etiquetas** (preferentemente GeoPackage). Polígonos de terreno verificado, cada uno con un atributo categórico con el nombre de la clase (p.ej. `crop_name = "wheat"`).
+- **Un archivo vectorial de etiquetas** (preferentemente GeoPackage). Una capa de **puntos** donde cada punto es una observación de verdad-en-terreno (visita con GPS, foto de dron, pin de foto-interpretación, centroide de parcela conocida) con un atributo categórico con el nombre de la clase (p.ej. `crop_name = "wheat"`). El ejemplo del Yaqui usa 1645 puntos en 6 clases. *(El pipeline también acepta polígonos — la geometría es flexible — pero los puntos son el insumo canónico y de menor esfuerzo.)*
 - **Un período de estudio claro** — los meses que quieres caracterizar. Para un cultivo anual normalmente quieres el ciclo completo más un mes antes y otro después, para capturar suelo desnudo y senescencia.
 - **Una cuenta de Google Earth Engine** aprobada y asociada a un proyecto de Google Cloud (sólo si vas a descargar imágenes nuevas — ver §5).
 - **Tiempo y disco**: presupuesta ~10–30 minutos de pipeline por cada ~1000 km² de AOI, y ~1 GB de disco por año de mosaicos.
@@ -58,39 +58,61 @@ El AOI sólo define el contorno, pero unas cuantas decisiones aquí te ahorran d
 
 ---
 
-## 4. Preparar tus etiquetas de entrenamiento
+## 4. Preparar tus etiquetas de entrenamiento (PUNTOS)
 
-Este es el **paso más importante** de todos. Etiquetas malas → mapa malo. Reglas prácticas de calidad:
+Este es el **paso más importante** de todos. Etiquetas malas → mapa malo. El pipeline espera un vector de **puntos**, cada uno una observación de verdad-en-terreno con su clase.
 
-### 4.1. Contenido
+### 4.1. ¿Por qué puntos?
 
-- **Cada polígono debe quedar completamente dentro de una sola clase.** El pipeline aplica un *filtro de pureza*: un segmento que solapa dos clases se descarta del entrenamiento. Polígonos mezclados son trabajo perdido.
+Cuando el pipeline corre la fase `label` hace esto internamente:
+
+1. Spatial join: cada punto se cruza con el segmento que lo contiene.
+2. *Filtro de pureza*: un segmento se conserva para entrenamiento sólo si **todos los puntos dentro de él están de acuerdo en una sola clase** (`nunique() == 1`). Un segmento con 5 puntos de *wheat* es puro → se usa para entrenar. Un segmento con 3 de *wheat* y 1 de *corn* es impuro → se descarta.
+3. Los segmentos sin puntos dentro **no** se usan para entrenamiento, pero **sí** se clasifican después en la fase `predict`.
+
+O sea: no necesitas dibujar polígonos precisos de cada parcela — marcas *dónde* sabes la clase y la segmentación hace la expansión espacial por ti.
+
+### 4.2. Cómo recolectar los puntos
+
+Cualquiera de estas fuentes funciona (puedes mezclarlas):
+
+- **Visitas con GPS de campo**: pones un waypoint dentro de cada parcela que recorres.
+- **Foto-interpretación con dron o imagen aérea**: pones pines en parcelas que reconoces con confianza.
+- **Parcelas conocidas de catastro o contratos**: un solo punto dentro de cada parcela basta.
+- **Foto-interpretación en QGIS** sobre basemaps de muy alta resolución (Google Satellite, Bing, ESRI World Imagery).
+
+Lo ideal: el punto cerca del **centro de la parcela** — puntos cerca de los bordes corren el riesgo de caer en un segmento vecino.
+
+### 4.3. Contenido
+
 - **Esquema**: una columna de atributo con el nombre de la clase. Ejemplo de campo: `klass` o `crop_name`. Mantén los valores cortos y consistentes — `"wheat"` en vez de `"Wheat / trigo (riego)"`.
 - **Incluye una clase `no_crop` / fondo** si quieres distinguir lo que es cultivo de lo que no. El ejercicio de prueba usa `no_crop` para absorber caminos, asentamientos, suelo desnudo, agua.
 
-### 4.2. ¿Cuántos polígonos necesito?
+### 4.4. ¿Cuántos puntos por clase?
 
-Apunta a **al menos 30–50 polígonos bien distribuidos por clase**, más para cultivos visualmente parecidos. El pipeline acota cada clase a `max_samples_per_class` (default 500), así que dar 5000 polígonos de una clase es esfuerzo perdido.
+Apunta a **al menos 50 puntos por clase**, más para cultivos visualmente parecidos. El pipeline acota cada clase a `max_samples_per_class` (default 500), así que más allá de unos cientos por clase deja de aportar.
+
+Referencia: el ejemplo del Yaqui usa **1645 puntos** (wheat 1028 · corn 258 · chickpea 150 · no_crop 89 · other_crops 81 · walnut 39) → después del filtro de pureza sobreviven solo **681 segmentos puros** para entrenar. Espera una atrición del 30–50% de puntos a segmentos puros, dependiendo de qué tan agrupado fue tu muestreo.
 
 Receta práctica:
 
 | Situación | Sugerencia |
 |---|---|
-| 6 clases con espectros distintos (maíz, trigo, alfalfa, barbecho, agua, urbano) | Mínimo 50 polígonos/clase. |
-| 6 clases con dos muy parecidas (trigo vs. cebada) | 100+ polígonos para el par confuso, ampliar el período de estudio, o considerar fusionarlas. |
-| Una clase rara con sólo 10 parcelas conocidas | O la omites, o aceptas que tendrá recall bajo. Si no la necesitas, fúndela en `no_crop`. |
+| 6 clases con espectros distintos (maíz, trigo, alfalfa, barbecho, agua, urbano) | 50–100 puntos/clase. |
+| 6 clases con dos muy parecidas (trigo vs. cebada) | 150+ puntos para el par confuso, ampliar el período de estudio, o considerar fusionarlas. |
+| Una clase rara con sólo ~20 parcelas conocidas | O aceptas recall bajo o la fundes en una clase vecina (p.ej. `other_crops`). |
 
-### 4.3. Distribución espacial
+### 4.5. Distribución espacial
 
-Reparte los polígonos **por todo el AOI**, no sólo en las zonas fáciles. Un modelo entrenado sólo en el tercio sur del AOI generaliza mal al tercio norte (otro suelo, otro microclima, otras fechas de siembra).
+Reparte los puntos **por todo el AOI**, no sólo en las zonas fáciles. Un modelo entrenado sólo en el tercio sur del AOI generaliza mal al tercio norte (otro suelo, otro microclima, otras fechas de siembra). Muchos puntos en una esquina son esfuerzo perdido — el filtro de pureza acota la contribución de cada segmento y el balance de clases acota la de cada clase.
 
-### 4.4. CRS
+### 4.6. CRS
 
-Usa el mismo CRS que el AOI (idealmente WGS84). El pipeline reproyecta automáticamente, pero alinear los CRS evita artefactos sutiles de precisión.
+Usa el mismo CRS que el AOI (idealmente WGS84 / `EPSG:4326`). El pipeline reproyecta automáticamente, pero alinear los CRS evita artefactos sutiles de precisión (un punto que cae justo fuera de su parcela).
 
-### 4.5. Guarda el archivo
+### 4.7. Guarda el archivo
 
-`labels_bajio_2023.gpkg` con un atributo `crop_name` (o el nombre que prefieras — se lo dirás al pipeline en §6).
+`labels_bajio_2023.gpkg` como capa de **Puntos** con un atributo `crop_name` (o el nombre que prefieras — se lo dirás al pipeline en §6).
 
 ---
 
@@ -231,13 +253,15 @@ Qué revisar: carga `segmented_polygons_bajio.shp` sobre el composite. La mayor�
 python src/main.py --config config.bajio.yaml --phase label
 ```
 
-Qué revisar: abre `labeling/segment_label_map.csv`. Cuenta cuántos segmentos puros tienes por clase:
+Qué revisar: abre `labeling/segment_label_map.csv`. Cuenta cuántos segmentos **puros** tienes por clase (esto es puntos-colapsados-a-segmentos, no el conteo crudo de puntos):
 
 ```bash
 awk -F, 'NR>1 {print $2}' outputs/aoi_bajio_2023/labeling/segment_label_map.csv | sort | uniq -c
 ```
 
-Si una clase tiene <30 segmentos puros, tus etiquetas son pocas o están mezcladas.
+Si una clase tiene <30 segmentos puros, tienes dos problemas posibles:
+- **Pocos puntos**: agrega más en zonas donde esa clase sea visible.
+- **Puntos mezclados en los mismos segmentos**: el filtro de pureza los descarta. Re-segmenta con un `num_clusters` mayor (segmentos más chicos) para que cada parcela tenga su propio segmento.
 
 ### Fase 4 — Extract
 
@@ -303,7 +327,8 @@ Descarga imágenes 2024 desplazadas del período original, segmenta y extrae fea
 - **`TypeError: TransformerMixin.__sklearn_tags__()`** durante `train` → tu scikit-learn es ≥ 1.6. El pin del `environment.yml` lo previene; si se coló, corre `mamba install -n geocrop_analysis_mx -c conda-forge "scikit-learn=1.5.*"`.
 - **Una fase se salta sin avisar** → su archivo de salida ya existe. Bórralo para forzar re-ejecución.
 - **`EE Quota exceeded`** → reduce el AOI o divídelo en sub-AOIs y mosaiquea los mapas predichos al final.
-- **Accuracy muy bajo (<0.5)** → casi siempre es problema de etiquetas: pocas, desbalanceadas o polígonos no puros.
+- **Accuracy muy bajo (<0.5)** → casi siempre es problema de etiquetas: pocos puntos, desbalanceadas entre clases, o puntos agrupados en una sola parte del AOI.
+- **Muchos puntos descartados por el filtro de pureza** → los segmentos son demasiado gruesos; sube `num_clusters` para que cada parcela tenga su propio segmento y evita poner puntos cerca de los bordes de la parcela.
 - **El modelo confunde dos clases todo el tiempo** → seguramente no son separables con tus datos. Fúndelas o agrega una feature discriminante (p.ej. extiende el período).
 
 ---

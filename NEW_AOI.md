@@ -26,7 +26,7 @@ Just enough to follow the rest of the guide:
 | Term | What it is | Why it matters |
 |---|---|---|
 | **AOI** (Area of Interest) | A single polygon describing the region you want to classify. | Defines what GEE downloads and where the segmentation runs. |
-| **Labels (ground truth)** | Polygons you trust, each tagged with the crop class. | The pipeline learns from these to label the rest of the AOI. |
+| **Labels (ground truth)** | A vector of **points**, each tagged with the class observed at that location (field GPS, photo-interpretation, known parcels). Polygons work too but points are the expected input. | Points seed the segments with classes; the segmentation does the work of "expanding" each point into the homogeneous polygon around it. |
 | **Segment** | A homogeneous polygon produced by the Shepherd algorithm. | The fundamental unit of classification — every segment gets one class. |
 | **Composite** | A single multiband image summarising the study period (geometric median of HLS scenes). | What segmentation runs on; smoother and less cloudy than any individual scene. |
 | **Features** | Per-segment statistics (mean/stdev/min/max/count/sum) for every band of every monthly mosaic. | The inputs to the classifier. |
@@ -40,7 +40,7 @@ Before touching the pipeline, gather these:
 
 - **A working installation** of GeoCrop Analysis MX. If you haven't done this yet, finish [TUTORIAL.md](TUTORIAL.md) first — the test run will fail-fast if anything is broken.
 - **An AOI vector file** (GeoPackage `.gpkg` recommended; Shapefile also works). Single polygon. Any projected or geographic CRS — the pipeline reprojects on the fly, but if you have a choice, give it WGS84 (`EPSG:4326`) because that's what GEE uses.
-- **A labels vector file** (GeoPackage strongly preferred). Polygons of land you have ground-truthed, each with a categorical attribute holding the class name (e.g. `crop_name = "wheat"`).
+- **A labels vector file** (GeoPackage strongly preferred). A **point** layer where each point is a ground-truth observation (GPS visit, drone photo, photo-interpretation pin, known parcel centroid) with a categorical attribute holding the class name (e.g. `crop_name = "wheat"`). The bundled Yaqui example uses 1645 points across 6 classes. *(Polygons are accepted too — the pipeline reads any geometry — but points are the canonical, lower-effort input.)*
 - **A clear study period** — the months you want to characterise. For an annual crop you typically want the full growing cycle plus a month before and after to capture bare-soil and senescence patterns.
 - **A Google Earth Engine account** approved on a Google Cloud project (only if you're downloading new imagery — see §5).
 - **Time and disk**: budget ~10–30 minutes of pipeline time per ~1000 km² of AOI, and ~1 GB of disk per year of mosaics.
@@ -58,39 +58,61 @@ The AOI is just a boundary, but a few choices here save you pain later:
 
 ---
 
-## 4. Prepare your training labels
+## 4. Prepare your training labels (POINTS)
 
-This is the **single most important step**. Garbage labels → garbage map. Quality rules of thumb:
+This is the **single most important step**. Garbage labels → garbage map. The pipeline expects a vector of **points**, each one a single ground-truth observation tagged with its class.
 
-### 4.1. Label content
+### 4.1. Why points?
 
-- **Each polygon must be entirely inside one class.** The pipeline runs a *purity filter*: a segment that overlaps two classes is discarded from training. Mixed polygons just waste effort.
+When the pipeline runs the `label` phase it does this internally:
+
+1. Spatial join: every label point is matched to the segment it falls inside.
+2. *Purity filter*: a segment is kept for training only if **all the points inside it agree on one class** (`nunique() == 1`). A segment with 5 *wheat* points is pure → used for training. A segment with 3 *wheat* and 1 *corn* is impure → discarded.
+3. Segments with no points inside are not used for training but they **are** classified later in the `predict` phase.
+
+So you don't need to draw precise field boundaries — you mark *where* you know the class and the segmentation does the spatial expansion for you.
+
+### 4.2. How to collect points
+
+Any of these sources works (combine freely):
+
+- **Field GPS visits**: drop a waypoint inside each parcel you visit.
+- **Drone or aerial photo interpretation**: drop pins on parcels you can confidently identify.
+- **Known parcels from cadastre or contracts**: a single point inside each known parcel is enough.
+- **Photo-interpretation in QGIS** over very-high-resolution basemaps (Google Satellite, Bing, ESRI World Imagery).
+
+A point near the **centre of the parcel** is best — points near edges risk landing in a neighbour segment.
+
+### 4.3. Label content
+
 - **Schema**: one attribute column holding the class name. Example field: `klass` or `crop_name`. Keep the values short and consistent — `"wheat"` not `"Wheat / trigo (irrigated)"`.
-- **Include a "no_crop" / background class** if you want to differentiate cropped from non-cropped. The test exercise uses `no_crop` to absorb roads, settlements, bare ground, water.
+- **Include a `no_crop` / background class** if you want to differentiate cropped from non-cropped. The test exercise uses `no_crop` to absorb roads, settlements, bare ground, water.
 
-### 4.2. How many polygons do I need?
+### 4.4. How many points per class?
 
-Aim for **at least 30–50 well-distributed polygons per class**, more for visually similar crops. The pipeline caps each class at `max_samples_per_class` (default 500) so giving 5000 polygons of one class is wasted effort.
+Aim for **at least 50 points per class**, more for visually similar crops. The pipeline caps each class at `max_samples_per_class` (default 500), so beyond a few hundred per class you stop benefiting.
+
+Reference: the bundled Yaqui example uses **1645 points** (wheat 1028 · corn 258 · chickpea 150 · no_crop 89 · other_crops 81 · walnut 39) → after the purity filter only **681 pure segments** survive for training. Expect ~30–50% attrition from points to pure-segments depending on how clustered your sampling is.
 
 Practical recipe:
 
 | Situation | Suggestion |
 |---|---|
-| 6 classes, distinct spectra (e.g. corn, wheat, alfalfa, fallow, water, urban) | 50 polygons/class minimum. |
-| 6 classes, two look almost identical (e.g. wheat vs. barley) | 100+ polygons each for the confusable pair, more dates in the study period, possibly merge them. |
-| One rare class with only 10 known fields | Either skip it or accept that it will have weak recall. Add it to `no_crop` if you don't need it. |
+| 6 classes, distinct spectra (corn, wheat, alfalfa, fallow, water, urban) | 50–100 points/class. |
+| 6 classes, two look almost identical (wheat vs. barley) | 150+ points each for the confusable pair, broaden the study period, or merge them. |
+| One rare class with only ~20 known parcels | Either accept weak recall or fuse it into a neighbouring class (e.g. `other_crops`). |
 
-### 4.3. Spatial distribution
+### 4.5. Spatial distribution
 
-Spread your polygons **across the whole AOI**, not just the easy parts. A model trained on the southern third of the AOI will generalise poorly to the northern third (different soil, micro-climate, planting dates).
+Spread your points **across the whole AOI**, not just the easy parts. A model trained only on the southern third generalises poorly to the northern third (different soil, micro-climate, planting dates). Many points in one corner is wasted effort — the purity filter caps each segment's contribution, and the class-balance cap caps each class.
 
-### 4.4. CRS
+### 4.6. CRS
 
-Use the same CRS as your AOI (ideally WGS84). The pipeline reprojects automatically, but matching CRS avoids subtle precision artefacts.
+Use the same CRS as your AOI (ideally WGS84 / `EPSG:4326`). The pipeline reprojects automatically, but matching CRS avoids subtle precision artefacts (a point landing just outside its parcel).
 
-### 4.5. Save it
+### 4.7. Save it
 
-`labels_bajio_2023.gpkg` with one attribute `crop_name` (or whatever you choose — you'll tell the pipeline the name in §6).
+`labels_bajio_2023.gpkg` as a **Point** layer with one attribute `crop_name` (or whatever you choose — you'll tell the pipeline the name in §6).
 
 ---
 
@@ -231,13 +253,15 @@ What to inspect: load `segmented_polygons_bajio.shp` over the composite. Field p
 python src/main.py --config config.bajio.yaml --phase label
 ```
 
-What to inspect: open `labeling/segment_label_map.csv`. Count how many pure segments you have per class:
+What to inspect: open `labeling/segment_label_map.csv`. Count how many **pure** segments you have per class (this is points-collapsed-to-segments, not raw point counts):
 
 ```bash
 awk -F, 'NR>1 {print $2}' outputs/aoi_bajio_2023/labeling/segment_label_map.csv | sort | uniq -c
 ```
 
-If a class has <30 pure segments, your labels for that class are either too few or too mixed.
+If a class has <30 pure segments, you have two possible problems:
+- **Too few points**: add more in zones where that class is visible.
+- **Mixed points on the same segments**: the purity filter is throwing them out. Re-segment with a higher `num_clusters` (smaller segments) so each parcel has its own segment.
 
 ### Phase 4 — Extract
 
@@ -303,7 +327,8 @@ This downloads 2024 imagery shifted from your original study period, segments an
 - **`TypeError: TransformerMixin.__sklearn_tags__()`** during `train` → your scikit-learn is ≥ 1.6. The pinned `environment.yml` should prevent this; if it slipped, run `mamba install -n geocrop_analysis_mx -c conda-forge "scikit-learn=1.5.*"`.
 - **A phase silently skipped** → its output file already exists. Delete to force a rerun.
 - **`EE Quota exceeded`** → reduce AOI size or split into sub-AOIs and merge predicted maps afterwards.
-- **Very low accuracy (<0.5)** → almost always a labels problem: too few, too unbalanced, or polygons that aren't pure inside their class.
+- **Very low accuracy (<0.5)** → almost always a labels problem: too few points, too unbalanced across classes, or points clustered in one part of the AOI.
+- **Many points discarded by the purity filter** → segments are too coarse; raise `num_clusters` so each parcel gets its own segment, and avoid placing points near parcel boundaries.
 - **Model confuses two classes constantly** → they probably aren't separable from your data. Either merge them or add a discriminating feature (e.g. extend the study period).
 
 ---
