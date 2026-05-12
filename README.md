@@ -3,6 +3,8 @@
 This project provides a complete and modular pipeline for crop classification using satellite imagery from Google Earth Engine. It is designed to be configurable, extensible, and easy to use for different regions and time periods.
 
 > **First time here?** Follow the end-to-end walk-through in [TUTORIAL.md](TUTORIAL.md) (or [TUTORIAL.es.md](TUTORIAL.es.md) in Spanish). It reproduces the bundled offline Yaqui Valley exercise from scratch in about 15 minutes.
+>
+> **Bringing your own region?** See [NEW_AOI.md](NEW_AOI.md) / [NEW_AOI.es.md](NEW_AOI.es.md) — a didactic, step-by-step guide for classifying a new Area of Interest, with quality recommendations for AOI and training labels.
 
 ## **Installation**
 
