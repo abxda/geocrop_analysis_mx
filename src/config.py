@@ -4,13 +4,18 @@ from pathlib import Path
 
 CONFIG_DIR = Path(__file__).parent.parent
 
-def _load_env_file(env_path):
+def load_env_file(env_path=None):
     """Loads KEY=VALUE lines from a plain env file into os.environ, without
     overriding variables already set in the real environment (e.g. by a
     CI system or an explicit `export`). Keeps secrets like EARTHDATA_TOKEN
     out of shell history/rc files: create an `env` file next to config.yaml
     (already gitignored) with `EARTHDATA_TOKEN=...` and it's picked up
-    automatically."""
+    automatically.
+
+    Public and safe to call on its own (e.g. from check_env.py) without a
+    config.yaml present — it only touches os.environ."""
+    if env_path is None:
+        env_path = CONFIG_DIR / "env"
     if not env_path.exists():
         return
     for line in env_path.read_text().splitlines():
@@ -23,7 +28,7 @@ def _load_env_file(env_path):
 
 def load_config(config_file="config.yaml"):
     """Loads the specified configuration file."""
-    _load_env_file(CONFIG_DIR / "env")
+    load_env_file()
     config_path = CONFIG_DIR / config_file
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)

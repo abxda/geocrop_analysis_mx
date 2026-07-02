@@ -15,6 +15,9 @@ def check_library(name, import_name):
 
 def main():
     """Runs validation checks for all critical libraries."""
+    from config import load_env_file
+    load_env_file()  # picks up an `env` file with EARTHDATA_TOKEN, if present
+
     print("--- Running Environment Validation Check ---")
     
     libraries_to_check = [
