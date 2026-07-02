@@ -1,0 +1,52 @@
+# GeoCrop Analysis MX — plain-pip dependencies (no conda required).
+# Install:  python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+#
+# PYTHON VERSION: use 3.11 or 3.12. Python 3.13 does NOT work yet (numpy<2
+# ships no wheels for it). Verified: every dependency below has pre-built
+# binary wheels on PyPI for Windows (win_amd64), Linux and macOS on
+# 3.11/3.12 — no compiler is ever needed. The single source-only package in
+# the whole tree is `stopit` (pulled by tpot), which is pure Python and
+# installs without build tools.
+
+numpy<2
+
+# Geospatial core (all ship binary wheels on PyPI: Linux/macOS/Windows)
+geopandas
+rasterio
+rioxarray
+
+# STAC/COG data access (replaces Google Earth Engine)
+pystac-client
+planetary-computer
+odc-stac
+dask
+
+# Segmentation: pure NumPy/SciPy port of pyshepseg (numba-free; also runs
+# in Pyodide/WebAssembly). https://github.com/abxda/shepherd-wasm
+shepherd-wasm
+
+# Zonal statistics (binary wheels; used with its rasterio/geopandas backends,
+# no GDAL Python bindings needed)
+exactextract
+
+# Tabular / ML
+pandas
+scikit-learn<1.6
+tpot==0.12.2
+joblib
+# tpot -> stopit imports pkg_resources: Python 3.12 venvs no longer ship
+# setuptools by default, and setuptools >= 81 removed pkg_resources
+setuptools<81
+
+# Misc
+pyyaml
+requests
+python-dateutil
+
+# --- WebAssembly (Pyodide) notes -------------------------------------------
+# The browser demo (wasm/geocrop_wasm_demo.ipynb) installs its own deps via
+# micropip; on CPython none of these are required because odc-stac handles
+# the COG reads. Uncomment only if you want to exercise the WASM code path
+# (cog_fetch.py) locally:
+# tifffile
+# pyodide-http

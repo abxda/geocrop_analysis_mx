@@ -1,2 +1,7 @@
-# Exception for test data
-!test_data/
+__pycache__/
+*.pyc
+.venv/
+
+# Secrets — never commit tokens
+env
+.env

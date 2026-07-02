@@ -12,34 +12,31 @@ git clone https://github.com/abxda/geocrop_analysis_mx.git
 cd geocrop_analysis_mx
 ```
 
-### 1.2. Configurar el Entorno de Conda
-Este proyecto depende de librerías geoespaciales complejas. Usar Conda es esencial. El archivo `environment.yml` contiene todas las dependencias con las versiones correctas.
+### 1.2. Configurar el Entorno con pip (sin conda)
+Todas las dependencias se instalan con **pip normal** — cada dependencia binaria (rasterio, geopandas, exactextract, etc.) publica wheels precompilados en PyPI para Linux, macOS y Windows. Necesitas Python 3.10+ (3.11 recomendado).
 
 ```bash
-# Se recomienda usar Mamba para una instalación significativamente más rápida
-conda install mamba -n base -c conda-forge
-
-# Usa Mamba (o Conda) para crear el entorno desde el archivo
-mamba env create -f environment.yml
+python -m venv .venv
+source .venv/bin/activate    # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
 ### 1.3. Activar el Entorno
 Cada vez que vayas a usar el pipeline, debes activar el entorno:
 ```bash
-conda activate geocrop_analysis_mx
+source .venv/bin/activate    # Windows: .venv\Scripts\activate
 ```
 
-### 1.4. Autenticación con Google Earth Engine (Opcional)
-Si no vas a usar los datos de prueba offline, necesitarás acceso a Google Earth Engine para descargar las imágenes.
+### 1.4. Token de NASA Earthdata (Opcional, recomendado)
+La descarga de imágenes ya **no usa Google Earth Engine**: se hace desde catálogos abiertos STAC/COG y por defecto no requiere ninguna cuenta (Microsoft Planetary Computer, acceso anónimo). Sin embargo, el espejo de HLS en Planetary Computer tiene huecos (casi no hay HLS Sentinel-2 antes de ~2020 en algunas regiones). Para usar el archivo HLS completo y autoritativo de la NASA:
 
+1. Crea una cuenta gratuita en [urs.earthdata.nasa.gov](https://urs.earthdata.nasa.gov).
+2. Genera un token (Perfil → *Generate Token*).
+3. Expórtalo antes de correr el pipeline:
 ```bash
-earthengine authenticate
+export EARTHDATA_TOKEN=tu_token        # Windows: set EARTHDATA_TOKEN=tu_token
 ```
-Sigue las instrucciones en tu navegador. Es posible que también necesites configurar un proyecto de facturación con `gcloud`:
-```bash
-gcloud auth application-default login
-gcloud config set project TU_PROYECTO_DE_GCP
-```
+Con el token presente (o con `hls_provider: "nasa"` en la configuración), el HLS se descarga de NASA LPCLOUD; sin token se usa Planetary Computer. El radar Sentinel-1 RTC siempre viene de Planetary Computer (anónimo).
 
 ## 2. Estructura de Carpetas
 El pipeline espera una estructura de carpetas específica. Desde la raíz del proyecto (`geocrop_analysis_mx`), estas carpetas deben existir al mismo nivel:
@@ -52,7 +49,7 @@ El pipeline espera una estructura de carpetas específica. Desde la raíz del pr
 Crea las carpetas `data` y `outputs` si no existen.
 
 ## 3. Flujo de Trabajo Principal (Modo Online)
-Este es el flujo de trabajo estándar, que procesa los datos desde la descarga en GEE hasta la predicción final.
+Este es el flujo de trabajo estándar, que procesa los datos desde la descarga de imágenes (STAC/COG) hasta la predicción final.
 
 ### 3.1. Configuración
 Edita el archivo `config.yaml` para definir tu área de interés, fechas de estudio y otros parámetros.
@@ -86,7 +83,7 @@ python src/main.py --config config.yaml --phase full_run
 ```
 
 ## 4. Flujo de Trabajo Offline (Para Pruebas)
-Esta es una nueva funcionalidad que te permite correr el pipeline sin necesidad de GEE, usando un set de imágenes pre-procesadas y comprimidas.
+Esta es una nueva funcionalidad que te permite correr el pipeline sin necesidad de descargar imágenes, usando un set de imágenes pre-procesadas y comprimidas.
 
 ### 4.1. (Opcional) Generar los Archivos Comprimidos
 Si quieres generar o actualizar los archivos comprimidos a partir de una ejecución online, usa la fase `compress_mosaics`. Esta fase busca todos los mosaicos en tu carpeta de `outputs` (incluyendo los de los años de predicción) y los guarda en una carpeta `mosaics_compressed`.

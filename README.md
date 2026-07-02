@@ -1,6 +1,6 @@
 # **GeoCrop Analysis MX**
 
-This project provides a complete and modular pipeline for crop classification using satellite imagery from Google Earth Engine. It is designed to be configurable, extensible, and easy to use for different regions and time periods.
+This project provides a complete and modular pipeline for crop classification using satellite imagery accessed through open **STAC/COG** cloud catalogs (no Google Earth Engine required). Optical time series come from **HLS** (Harmonized Landsat Sentinel-2) and radar from **Sentinel-1 RTC** (radiometrically terrain-corrected gamma-0); composites (geometric medians) are computed locally with a portable pure-NumPy implementation. It is designed to be configurable, extensible, and easy to use for different regions and time periods.
 
 > **First time here?** Follow the end-to-end walk-through in [TUTORIAL.md](TUTORIAL.md) (or [TUTORIAL.es.md](TUTORIAL.es.md) in Spanish). It reproduces the bundled offline Yaqui Valley exercise from scratch in about 15 minutes.
 >
@@ -8,34 +8,37 @@ This project provides a complete and modular pipeline for crop classification us
 
 ## **Installation**
 
-This project has complex dependencies (gdal, geopandas, etc.). Following these steps precisely is essential for ensuring the environment is set up correctly.
+All dependencies install from **plain pip** (every binary dependency ships pre-built wheels on PyPI for Linux, macOS and Windows) — **no conda required**.
 
-1. **Install Conda**: We recommend installing **Miniforge**. If you don't have it yet, download and install Miniforge from the [Miniforge GitHub releases page](https://github.com/conda-forge/miniforge/releases).  
-2. **Open the Conda Terminal**: Open "Miniforge Prompt" (on Windows) or your terminal (macOS/Linux).  
-3. **Clone the Project**: git clone https://github.com/abxda/geocrop_analysis_mx  
-4. **Create Project Directories**: Outside the project folder, create the data and outputs directories. Your folder structure should look like this:  
+1. **Install Python 3.10+** (3.11 recommended) from [python.org](https://www.python.org/downloads/) or your system package manager.  
+2. **Clone the Project**: git clone https://github.com/abxda/geocrop_analysis_mx  
+3. **Create Project Directories**: Outside the project folder, create the data and outputs directories. Your folder structure should look like this:  
   \- /path/to/your/projects/  
      |- geocrop\_analysis\_mx/  \<-- The cloned repository  
      |- data/                 \<-- Empty folder  
      |- outputs/              \<-- Empty folder
 
-5. **Create the Conda Environment**: Navigate into the geocrop\_analysis\_mx folder. This command will create the environment with all the necessary dependencies.  
-   conda env create \-f environment.yml
+4. **Create a virtual environment and install** (from inside the geocrop\_analysis\_mx folder):  
+   `python -m venv .venv`  
+   `source .venv/bin/activate` (Windows: `.venv\Scripts\activate`)  
+   `pip install -r requirements.txt`
 
-6. **Activate the Environment**: You must activate the environment every time you want to use the project.  
-   conda activate geocrop\_analysis\_mx
+5. **Activate the environment** every time you want to use the project: `source .venv/bin/activate` (Windows: `.venv\Scripts\activate`).
 
-7. **Validate the Environment**: Before proceeding, run this script to ensure all critical libraries are installed and accessible.  
+6. **Validate the Environment**: Before proceeding, run this script to ensure all critical libraries are installed and accessible.  
    python check\_env.py
 
    *You should see \[SUCCESS\] messages for all libraries. If not, please review the installation steps.*  
-8. **Authenticate Google Earth Engine**: Run earthengine authenticate if it's your first time using the platform on this machine. Follow the instructions in your browser.
+8. **(Optional) NASA Earthdata token for the complete HLS archive**: the pipeline downloads imagery from open STAC/COG catalogs and needs **no account by default** (Microsoft Planetary Computer, anonymous access). However, MPC's HLS mirror has gaps (little/no Sentinel-2 HLS before ~2020 in some regions). For the authoritative, complete HLS archive, create a free account at [urs.earthdata.nasa.gov](https://urs.earthdata.nasa.gov), generate a token (Profile → Generate Token), and export it before running:
+   `export EARTHDATA_TOKEN=<your token>` (Windows: `set EARTHDATA_TOKEN=...`).
+   With the token set (or `hls_provider: "nasa"` in the config), HLS is fetched from NASA LPCLOUD; without it the pipeline falls back to Planetary Computer. Sentinel-1 RTC radar always comes from Planetary Computer (anonymous).
+   *Step-by-step manual (Spanish, PDF):* [`docs/manual_tokens_gratuitos.pdf`](docs/manual_tokens_gratuitos.pdf).
 
 ## **Tutorial: Running the Test Case (Step-by-Step)**
 
 This tutorial will guide you through running the included test case, phase by phase. This is the best way to understand the pipeline and verify that your installation is correct.
 
-**Prerequisite**: Ensure your Conda environment (geocrop\_analysis\_mx) is activated.
+**Prerequisite**: Ensure your virtual environment is activated (`source .venv/bin/activate`).
 
 ### **Step 0: Prepare Test Data**
 
@@ -85,7 +88,7 @@ You can open the .gpkg file in GIS software like QGIS to visualize the crop clas
 
 ## **Advanced Usage**
 
-* **Full Run (full\_run):** To execute all steps (from download to prediction) at once. *Note: requires active GEE authentication.*  
+* **Full Run (full\_run):** To execute all steps (from download to prediction) at once. *Note: downloads imagery from the open STAC catalogs (internet connection required; EARTHDATA\_TOKEN recommended for the complete HLS archive).*  
   \# This will download real data and may take some time  
   python src/main.py \--config config.test.yaml \--phase full\_run
 
@@ -94,6 +97,17 @@ You can open the .gpkg file in GIS software like QGIS to visualize the crop clas
 
 * **Using Your Own Data:** Prepare your own data (AOI, labels) and a custom configuration file (config.my\_region.yaml), then run the pipeline.  
   python src/main.py \--config config.my\_region.yaml \--phase full\_run
+
+## **Running in the Browser (WebAssembly)**
+
+The time-series generation core (STAC search → windowed COG reads → geomedian composites → Shepherd segmentation) also runs **entirely inside a web browser** via [Pyodide](https://pyodide.org) — no server, no installation. See [`wasm/geocrop_wasm_demo.ipynb`](wasm/geocrop_wasm_demo.ipynb): open it in a Pyodide-backed JupyterLite (for example the one from [portable-satelital](https://github.com/abxda/portable-satelital)) or run it unchanged in regular Jupyter.
+
+How it works in WASM:
+
+* GDAL's network layer (`/vsicurl`) does not exist in the browser, so `src/data_download/cog_fetch.py` replays odc-stac's windowed reads with **HTTP Range requests + [tifffile](https://pypi.org/project/tifffile/)** (including a pure-NumPy decoder for TIFF's floating-point predictor, normally a C extension). A ~1.9 GB Sentinel-1 RTC scene costs only a few MB per AOI.
+* Optical data comes from **Earth Search Sentinel-2 L2A** (`hls_provider: "earthsearch"`), the optical source whose storage sends CORS headers; radar keeps using **Planetary Computer Sentinel-1 RTC** (CORS-enabled). The HLS blobs (NASA and MPC) do not allow browser requests, so true HLS remains CPython-only.
+* Segmentation uses [shepherd-wasm](https://github.com/abxda/shepherd-wasm), the pure NumPy/SciPy port of pyshepseg (bit-exact, numba-free) — the same library the regular pipeline now uses.
+* The ML phases (TPOT) are not WASM-compatible; in the browser use scikit-learn directly.
 
 ## **Prediction for a New Year**
 

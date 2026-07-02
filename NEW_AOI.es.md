@@ -25,7 +25,7 @@ Lo justo para seguir la guía:
 
 | Término | Qué es | Por qué importa |
 |---|---|---|
-| **AOI** (Área de Interés) | Un único polígono que describe la región a clasificar. | Define qué descarga GEE y dónde se hace la segmentación. |
+| **AOI** (Área de Interés) | Un único polígono que describe la región a clasificar. | Define qué se descarga y dónde se hace la segmentación. |
 | **Etiquetas (verdad-en-terreno)** | Un vector de **puntos**, cada uno marcado con la clase observada en ese sitio (GPS de campo, foto-interpretación, parcelas conocidas). Polígonos también funcionan pero los puntos son el insumo esperado. | Los puntos siembran a los segmentos con clases; la segmentación se encarga de "expandir" cada punto al polígono homogéneo que lo rodea. |
 | **Segmento** | Un polígono homogéneo producido por el algoritmo Shepherd. | Es la unidad básica de clasificación — a cada segmento se le asigna una clase. |
 | **Composite** | Una imagen multibanda que resume el período de estudio (mediana geométrica de las escenas HLS). | Es sobre la que corre la segmentación; más limpia y menos nublada que cualquier escena individual. |
@@ -39,10 +39,10 @@ Lo justo para seguir la guía:
 Antes de tocar el pipeline, reúne esto:
 
 - **Una instalación funcional** de GeoCrop Analysis MX. Si aún no la tienes, termina primero [TUTORIAL.es.md](TUTORIAL.es.md) — la corrida de prueba fallará rápido si algo está roto.
-- **Un archivo vectorial de AOI** (GeoPackage `.gpkg` recomendado; Shapefile también funciona). Un solo polígono. Cualquier CRS proyectado o geográfico — el pipeline reproyecta al vuelo, pero si tienes opción, usa WGS84 (`EPSG:4326`) porque es lo que usa GEE.
+- **Un archivo vectorial de AOI** (GeoPackage `.gpkg` recomendado; Shapefile también funciona). Un solo polígono. Cualquier CRS proyectado o geográfico — el pipeline reproyecta al vuelo, pero si tienes opción, usa WGS84 (`EPSG:4326`) porque es la malla de salida del pipeline.
 - **Un archivo vectorial de etiquetas** (preferentemente GeoPackage). Una capa de **puntos** donde cada punto es una observación de verdad-en-terreno (visita con GPS, foto de dron, pin de foto-interpretación, centroide de parcela conocida) con un atributo categórico con el nombre de la clase (p.ej. `crop_name = "wheat"`). El ejemplo del Yaqui usa 1645 puntos en 6 clases. *(El pipeline también acepta polígonos — la geometría es flexible — pero los puntos son el insumo canónico y de menor esfuerzo.)*
 - **Un período de estudio claro** — los meses que quieres caracterizar. Para un cultivo anual normalmente quieres el ciclo completo más un mes antes y otro después, para capturar suelo desnudo y senescencia.
-- **Una cuenta de Google Earth Engine** aprobada y asociada a un proyecto de Google Cloud (sólo si vas a descargar imágenes nuevas — ver §5).
+- **Opcional: un token gratuito de NASA Earthdata** para el archivo HLS completo (sólo si vas a descargar imágenes nuevas — ver §5).
 - **Tiempo y disco**: presupuesta ~10–30 minutos de pipeline por cada ~1000 km² de AOI, y ~1 GB de disco por año de mosaicos.
 
 ---
@@ -51,7 +51,7 @@ Antes de tocar el pipeline, reúne esto:
 
 El AOI sólo define el contorno, pero unas cuantas decisiones aquí te ahorran dolor después:
 
-1. **Mantenlo apretado.** Cada km² extra es más ancho de banda de GEE, más disco y más ruido en la segmentación. Si quieres contexto, deja un buffer de 1–2 km, no más.
+1. **Mantenlo apretado.** Cada km² extra es más ancho de banda, más disco y más ruido en la segmentación. Si quieres contexto, deja un buffer de 1–2 km, no más.
 2. **Un solo polígono, una sola feature.** Si tienes multipart o varios polígonos disjuntos, dissuélvelos primero. El pipeline lee `gdf.geometry[0]` — sólo usa el primero.
 3. **Valida la geometría.** En QGIS: *Vectorial → Herramientas de geometría → Comprobar validez*. Arregla auto-intersecciones o geometrías nulas.
 4. **Guárdalo como GeoPackage**: `Archivo → Guardar features como → GeoPackage`. Usa un nombre corto y descriptivo sin espacios: `aoi_bajio_2023.gpkg`.
@@ -116,29 +116,24 @@ Usa el mismo CRS que el AOI (idealmente WGS84 / `EPSG:4326`). El pipeline reproy
 
 ---
 
-## 5. Configurar Google Earth Engine (omite si ya tienes mosaicos offline)
+## 5. Configurar el acceso a datos (omite si ya tienes mosaicos offline)
 
-Sólo necesitas esto si no tienes ya los mosaicos en disco. Para descargar imágenes frescas:
+Las imágenes se descargan desde catálogos abiertos STAC/COG en la nube — **sin cuenta de Google Earth Engine y sin registro obligatorio**:
 
-1. **Regístrate** en https://earthengine.google.com y espera la aprobación.
-2. **Crea un proyecto de Google Cloud** en https://console.cloud.google.com (cualquier proyecto; anota su ID).
-3. **Autentícate localmente**:
+- **El radar Sentinel-1 RTC** viene de Microsoft Planetary Computer con acceso anónimo. No hay nada que configurar.
+- **El óptico HLS** (Harmonized Landsat Sentinel-2) también viene por defecto de Planetary Computer — pero ese espejo tiene huecos (casi no hay HLS Sentinel-2 antes de ~2020 en algunas regiones). Para el archivo completo y autoritativo de la NASA:
 
-   ```bash
-   conda activate geocrop_analysis_mx
-   earthengine authenticate
-   ```
+  1. **Crea una cuenta gratuita** en https://urs.earthdata.nasa.gov (inmediato, sin espera de aprobación).
+  2. **Genera un token**: Perfil → *Generate Token*.
+  3. **Expórtalo** antes de correr el pipeline:
 
-   Se abre una ventana del navegador; copia el código de autenticación de vuelta a la terminal.
+     ```bash
+     export EARTHDATA_TOKEN=tu_token    # Windows: set EARTHDATA_TOKEN=tu_token
+     ```
 
-4. **Configura credenciales de aplicación y el proyecto**:
+  Con el token presente (o `hls_provider: "nasa"` en tu configuración), el HLS se transmite desde NASA LPCLOUD; sin token el pipeline usa Planetary Computer y avisa sobre los huecos.
 
-   ```bash
-   gcloud auth application-default login
-   gcloud config set project TU_ID_DE_PROYECTO_GCP
-   ```
-
-5. **Revisa cuotas**: `getDownloadURL` tiene rate-limit. El pipeline divide tu AOI en piezas ≤ 0.05° automáticamente, pero un AOI muy grande (>10,000 km²) puede requerir una corrida supervisada.
+Las descargas son lecturas COG por ventana (peticiones HTTP de rango): sólo se transfieren los bytes que intersectan tu AOI, y los compuestos se escriben directamente como GeoTIFFs únicos — sin paso de teselado/fusión y sin cuotas de exportación.
 
 ---
 

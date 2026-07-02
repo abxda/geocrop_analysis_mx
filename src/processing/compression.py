@@ -1,7 +1,7 @@
 import os
-import subprocess
 import glob
-import shutil
+import rasterio
+import rasterio.shutil
 
 def _log(message):
     from datetime import datetime
@@ -10,12 +10,6 @@ def _log(message):
 def run_compression_phase(output_dir, config):
     """Compresses all mosaic files from the main output and all prediction subdirectories."""
     _log("--- Executing PHASE: Compress Mosaics ---")
-
-    gdal_translate_path = shutil.which('gdal_translate')
-    if not gdal_translate_path:
-        _log("  - FAILED: 'gdal_translate' command not found. Is GDAL installed and in your system's PATH?")
-        return
-    _log(f"- Using gdal_translate found at: {gdal_translate_path}")
 
     # The single, top-level directory for all compressed mosaics
     compressed_dir = os.path.join(output_dir, 'mosaics_compressed')
@@ -69,22 +63,17 @@ def run_compression_phase(output_dir, config):
 
         _log(f"- Compressing {filename} -> {output_filename}...")
 
-        command = [
-            gdal_translate_path,
-            '-co', 'COMPRESS=DEFLATE',
-            '-co', 'PREDICTOR=2',
-            '-co', 'ZLEVEL=9',
-            input_path,
-            output_path
-        ]
-
         try:
-            subprocess.run(command, check=True, capture_output=True, text=True)
+            # Same creation options as the old gdal_translate call, but via
+            # rasterio so no GDAL CLI installation is required.
+            rasterio.shutil.copy(
+                input_path, output_path, driver='GTiff',
+                COMPRESS='DEFLATE', PREDICTOR='2', ZLEVEL='9')
             input_size = os.path.getsize(input_path) / (1024 * 1024)
             output_size = os.path.getsize(output_path) / (1024 * 1024)
             _log(f"  - Success. Size: {input_size:.2f} MB -> {output_size:.2f} MB")
-        except subprocess.CalledProcessError as e:
-            _log(f"  - FAILED to compress {filename}. Error: {e.stderr}")
+        except Exception as e:
+            _log(f"  - FAILED to compress {filename}. Error: {e}")
 
     _log("--- Compress Mosaics phase complete ---")
 

@@ -14,6 +14,14 @@ aoi_file: "AOI_Chihuahua.gpkg"
 labels_file: "etiquetas_chihuahua.gpkg"
 labels_field_name: "klass"
 
+# Optical provider: "nasa" (HLS from LPCLOUD, complete archive, requires the
+# free EARTHDATA_TOKEN env var), "mpc" (HLS from Planetary Computer, anonymous
+# but with archive gaps before ~2020), "earthsearch" (Sentinel-2 L2A from
+# Element 84/AWS, anonymous and CORS-enabled — the one that works in a
+# browser/WebAssembly), or "auto" (earthsearch in WASM; else nasa if a token
+# is set; else mpc).
+hls_provider: "auto"
+
 # -----------------------------------------------------------------------------
 # Date & Time Period Configuration
 # -----------------------------------------------------------------------------

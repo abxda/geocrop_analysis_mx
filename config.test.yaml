@@ -9,6 +9,14 @@ aoi_file: "aoi_yaqui_test.gpkg"
 labels_file: "crop_labels_yaqui_test.gpkg"
 labels_field_name: "crop_name"
 
+# Optical provider: "nasa" (HLS from LPCLOUD, complete archive, requires the
+# free EARTHDATA_TOKEN env var), "mpc" (HLS from Planetary Computer, anonymous
+# but with archive gaps before ~2020), "earthsearch" (Sentinel-2 L2A from
+# Element 84/AWS, anonymous and CORS-enabled — the one that works in a
+# browser/WebAssembly), or "auto" (earthsearch in WASM; else nasa if a token
+# is set; else mpc).
+hls_provider: "auto"
+
 study_period:
   start_date: "2017-10-01"
   end_date: "2018-05-31"
