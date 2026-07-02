@@ -1,4 +1,5 @@
 import os
+import sys
 import glob
 import geopandas as gpd
 import argparse
@@ -11,7 +12,7 @@ from dateutil.relativedelta import relativedelta
 
 from config import load_config
 from data_download import stac_utils, stac_multispectral, stac_radar
-from processing import segmentation, labeling, feature_extraction, modeling, mapping, compression
+from processing import segmentation, labeling, feature_extraction, modeling, mapping, compression, extra_layers
 
 def _log(message):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}")
@@ -67,12 +68,28 @@ def run_cleanup_phase(output_dir):
     _log("- Cleanup complete.")
 
 def run_download_phase(config, study_area, output_dir):
+    monthly_ranges = _generate_monthly_ranges(config['study_period']['start_date'], config['study_period']['end_date'])
+    backend = config.get('download_backend', 'stac')
+    if backend == 'gee':
+        # Optional: users with a Google Earth Engine account can offload the
+        # compositing to Google's servers. Everything else in the pipeline
+        # is identical; see data_download/gee_backend.py.
+        from data_download import gee_backend
+        gee_backend.run_download_phase(config, study_area, output_dir, monthly_ranges)
+        return
+    if backend != 'stac':
+        _log(f"ERROR: unknown download_backend '{backend}' in the config file. "
+             f"Valid values are \"stac\" (default, no account needed) or \"gee\" "
+             f"(optional, requires a Google Earth Engine account).")
+        sys.exit(1)
+    _run_download_phase_stac(config, study_area, output_dir, monthly_ranges)
+
+def _run_download_phase_stac(config, study_area, output_dir, monthly_ranges):
     stac_utils.configure_gdal_env()
     hls_provider, hls_catalog = stac_multispectral.resolve_provider(config.get('hls_provider', 'auto'))
     _log(f"- HLS provider: {hls_provider}")
     radar_catalog = stac_utils.get_catalog()
     geobox = stac_utils.aoi_geobox(study_area, scale_meters=30)
-    monthly_ranges = _generate_monthly_ranges(config['study_period']['start_date'], config['study_period']['end_date'])
     _log("--- Processing Main Segmentation Composite ---")
     if config['segmentation_composite_uses_full_study_period']:
         seg_start, seg_end = config['study_period']['start_date'], config['study_period']['end_date']
@@ -186,7 +203,14 @@ def main():
             month_only = month_str.split('-')[1] # MM
             image_list.append({'path': os.path.join(output_dir, 'multispectral', month_str, f"multispectral_{month_str}.tif"), 'prefix': f'ms_{month_only}_'})
             image_list.append({'path': os.path.join(output_dir, 'radar', month_str, f"radar_{month_str}.tif"), 'prefix': f'sar_{month_only}_'})
-        
+
+        # External rasters (DEM, slope, climate, ...) declared under
+        # extra_layers in the config join the same per-segment statistics.
+        if config.get('extra_layers'):
+            aoi_path = os.path.join(data_dir, config['aoi_file'])
+            aoi_geometry = gpd.read_file(aoi_path).to_crs('EPSG:4326').geometry[0].__geo_interface__
+            image_list.extend(extra_layers.prepare_extra_layers(config, output_dir, aoi_geometry))
+
         feature_extraction.extract_features(output_dir, config, image_list)
         _log(f"PHASE 'Extract Features' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
 

@@ -38,6 +38,27 @@ export EARTHDATA_TOKEN=tu_token        # Windows: set EARTHDATA_TOKEN=tu_token
 ```
 Con el token presente (o con `hls_provider: "nasa"` en la configuración), el HLS se descarga de NASA LPCLOUD; sin token se usa Planetary Computer. El radar Sentinel-1 RTC siempre viene de Planetary Computer (anónimo).
 
+### 1.5. Google Earth Engine (opcional, no requerido)
+El backend por defecto (`download_backend: "stac"`) no necesita ninguna cuenta. Si ya tienes cuenta de Google Earth Engine, puedes delegar el cálculo de las geomedianas a los servidores de Google (menos tiempo de cómputo local):
+
+```bash
+pip install earthengine-api
+earthengine authenticate
+```
+
+y en tu archivo de configuración: `download_backend: "gee"`. Los archivos de salida son idénticos con cualquiera de los dos backends. Si eliges GEE sin tenerlo instalado o autenticado, el pipeline se detiene con instrucciones paso a paso (no con un error críptico).
+
+### 1.6. Capas raster externas como variables adicionales (opcional)
+Si ya cuentas con rasters propios (MDE, pendiente, precipitación, temperatura, uso de suelo, …), puedes sumarlos como variables del modelo sin modificar código, declarándolos en la configuración:
+
+```yaml
+extra_layers:
+  - path: "../data/mi_aoi/mde.tif"
+    prefix: "mde_"        # -> variables mde_mean, mde_stdev, ...
+```
+
+En la fase `extract`, cada capa se valida con mensajes claros (¿existe?, ¿tiene sistema de coordenadas?, ¿traslapa el área de estudio?) y se reproyecta automáticamente si su CRS es distinto — tu archivo original nunca se modifica. Recuerda usar las mismas capas al predecir un año nuevo con un modelo entrenado con ellas.
+
 ## 2. Estructura de Carpetas
 El pipeline espera una estructura de carpetas específica. Desde la raíz del proyecto (`geocrop_analysis_mx`), estas carpetas deben existir al mismo nivel:
 ```

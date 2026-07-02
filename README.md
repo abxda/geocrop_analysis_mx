@@ -100,6 +100,32 @@ You can open the .gpkg file in GIS software like QGIS to visualize the crop clas
 * **Using Your Own Data:** Prepare your own data (AOI, labels) and a custom configuration file (config.my\_region.yaml), then run the pipeline.  
   python src/main.py \--config config.my\_region.yaml \--phase full\_run
 
+## **Optional: Google Earth Engine backend**
+
+The default download backend (`"stac"`) needs **no account** and computes the composites locally. If you already have a Google Earth Engine account, you can offload the compositing to Google's servers — less local CPU time — by opting in:
+
+1. `pip install earthengine-api` and run `earthengine authenticate` once.
+2. In your config file set:
+   ```yaml
+   download_backend: "gee"
+   ```
+
+Output files, names and grid are identical either way, so every later phase is unaffected. If GEE is selected but not installed or not authenticated, the pipeline stops with step-by-step instructions instead of a traceback. **GEE is strictly optional — it is not part of `requirements.txt` and nothing else depends on it.**
+
+## **Optional: external raster layers as extra features**
+
+Rasters you already have (a DEM, slope, precipitation, temperature, land-use maps, …) can join the classification as additional per-segment features **without touching any code**. Declare them in your config:
+
+```yaml
+extra_layers:
+  - path: "../data/my_aoi/dem.tif"
+    prefix: "dem_"          # -> features dem_mean, dem_stdev, dem_min, ...
+  - path: "../data/my_aoi/precipitacion.tif"
+    prefix: "lluvia_"
+```
+
+During the `extract` phase each layer is validated with plain-language messages (missing file, no CRS, no overlap with the AOI, …) and reprojected automatically when its CRS differs from the pipeline grid — the original file is never modified. Multiband rasters produce one feature set per band (`clima_b1_mean`, `clima_b2_mean`, …). Remember to use the **same layers** when predicting a new year with a model trained with them.
+
 ## **Running in the Browser (WebAssembly)**
 
 The time-series generation core (STAC search → windowed COG reads → geomedian composites → Shepherd segmentation) also runs **entirely inside a web browser** via [Pyodide](https://pyodide.org) — no server, no installation. See [`wasm/geocrop_wasm_demo.ipynb`](wasm/geocrop_wasm_demo.ipynb): open it in a Pyodide-backed JupyterLite (for example the one from [portable-satelital](https://github.com/abxda/portable-satelital)) or run it unchanged in regular Jupyter.

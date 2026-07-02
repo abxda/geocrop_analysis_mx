@@ -23,6 +23,28 @@ labels_field_name: "klass"
 hls_provider: "auto"
 
 # -----------------------------------------------------------------------------
+# Download backend (optional Google Earth Engine support)
+# -----------------------------------------------------------------------------
+# "stac" (default): open STAC/COG catalogs, no account needed, composites are
+#   computed locally.
+# "gee" (optional): compute the composites on Google Earth Engine's servers
+#   and only download the results — faster locally, but requires a GEE
+#   account plus:  pip install earthengine-api  and  earthengine authenticate
+download_backend: "stac"
+
+# -----------------------------------------------------------------------------
+# External raster layers as extra model features (optional)
+# -----------------------------------------------------------------------------
+# Rasters you already have (DEM, slope, precipitation, land use, ...) can join
+# the per-segment statistics without touching any code. Different CRS are
+# reprojected automatically; problems are explained in plain language.
+# extra_layers:
+#   - path: "../data/my_aoi/dem.tif"
+#     prefix: "dem_"          # -> features dem_mean, dem_stdev, ...
+#   - path: "../data/my_aoi/precipitacion.tif"
+#     prefix: "lluvia_"
+
+# -----------------------------------------------------------------------------
 # Date & Time Period Configuration
 # -----------------------------------------------------------------------------
 # Define the overall study period. Monthly composites will be generated

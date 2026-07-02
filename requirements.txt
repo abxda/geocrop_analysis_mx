@@ -46,6 +46,11 @@ pyyaml
 requests
 python-dateutil
 
+# --- Optional: Google Earth Engine backend ---------------------------------
+# Only needed if you set download_backend: "gee" in your config (requires a
+# GEE account; run `earthengine authenticate` after installing):
+# earthengine-api
+
 # --- WebAssembly (Pyodide) notes -------------------------------------------
 # The browser demo (wasm/geocrop_wasm_demo.ipynb) installs its own deps via
 # micropip; on CPython none of these are required because odc-stac handles
