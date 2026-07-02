@@ -5,6 +5,8 @@ This project provides a complete and modular pipeline for crop classification us
 > **First time here?** Follow the end-to-end walk-through in [TUTORIAL.md](TUTORIAL.md) (or [TUTORIAL.es.md](TUTORIAL.es.md) in Spanish). It reproduces the bundled offline Yaqui Valley exercise from scratch in about 15 minutes.
 >
 > **Bringing your own region?** See [NEW_AOI.md](NEW_AOI.md) / [NEW_AOI.es.md](NEW_AOI.es.md) — a didactic, step-by-step guide for classifying a new Area of Interest, with quality recommendations for AOI and training labels.
+>
+> **Prefer Jupyter?** [`validacion_geocrop.ipynb`](validacion_geocrop.ipynb) runs the same end-to-end validation — environment check, a live STAC/COG download demo, and every pipeline phase through the final crop map — as a notebook. Open it from the repository root (same folder as `check_env.py`) so its relative paths resolve. For the in-browser (JupyterLite/Pyodide) version, see [`wasm/geocrop_wasm_demo.ipynb`](wasm/geocrop_wasm_demo.ipynb).
 
 ## **Installation**
 
