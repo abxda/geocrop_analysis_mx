@@ -1,6 +1,6 @@
 # Tutorial Paso a Paso: Replicar la Ejecución de Prueba del Valle del Yaqui
 
-Esta guía te lleva por una corrida completa del pipeline GeoCrop Analysis usando los **datos de prueba offline incluidos** en el repositorio (no necesitas credenciales de Google Earth Engine). Al terminar tendrás un modelo de clasificación de cultivos entrenado y un mapa final en GeoPackage para el Valle del Yaqui.
+Esta guía te lleva por una corrida completa del pipeline GeoCrop Analysis usando los **datos de prueba offline incluidos** en el repositorio (no necesitas cuentas ni credenciales). Al terminar tendrás un modelo de clasificación de cultivos entrenado y un mapa final en GeoPackage para el Valle del Yaqui.
 
 > English version: [TUTORIAL.md](TUTORIAL.md)
 
@@ -9,17 +9,17 @@ Esta guía te lleva por una corrida completa del pipeline GeoCrop Analysis usand
 ## 0. Requisitos
 
 - Una computadora con al menos **8 GB de RAM** y **10 GB libres en disco**.
-- **Miniforge** (recomendado) o Miniconda instalado. Descárgalo desde la [página de releases de Miniforge](https://github.com/conda-forge/miniforge/releases).
+- **Python 3.10+** (3.11 recomendado) desde [python.org](https://www.python.org/downloads/) o el gestor de paquetes de tu sistema.
 - **Git** instalado.
-- Linux, macOS o Windows (en Windows usa la "Miniforge Prompt").
+- Linux, macOS o Windows.
 
-**No** necesitas cuenta de Google Earth Engine para este tutorial — todos los mosaicos satelitales vienen empaquetados en `test_data/preprocessed_mosaics/`.
+**No** necesitas ninguna cuenta para este tutorial — todos los mosaicos satelitales vienen empaquetados en `test_data/preprocessed_mosaics/`.
 
 ---
 
 ## 1. Clonar el repositorio
 
-Abre la Miniforge Prompt (Windows) o tu terminal (Linux/macOS) y coloca el proyecto dentro de una carpeta padre:
+Abre una terminal (Linux/macOS) o PowerShell/CMD (Windows) y coloca el proyecto dentro de una carpeta padre:
 
 ```bash
 mkdir geocrop_workspace
@@ -52,35 +52,27 @@ geocrop_workspace/
 └── outputs/     <-- vacía
 ```
 
-## 3. Crear el entorno conda
+## 3. Crear el entorno de Python (pip normal — sin conda)
 
 Desde dentro de la carpeta del proyecto:
 
 ```bash
 cd geocrop_analysis_mx
+python -m venv .venv
+source .venv/bin/activate    # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-Recomendamos **mamba** porque resuelve dependencias mucho más rápido (5-15 min vs. 30+ con conda puro):
+Todas las dependencias binarias (rasterio, geopandas, exactextract, …) publican wheels precompilados en PyPI, así que esto toma un par de minutos sin necesidad de compilador.
 
-```bash
-conda install -n base -c conda-forge mamba -y
-mamba env create -f environment.yml
-```
-
-Si prefieres conda puro:
-
-```bash
-conda env create -f environment.yml
-```
-
-El archivo `environment.yml` ya fija `scikit-learn<1.6` para que `tpot==0.12.2` funcione sin parches.
+El archivo `requirements.txt` ya fija `scikit-learn<1.6` para que `tpot==0.12.2` funcione sin parches.
 
 ## 4. Activar el entorno
 
 Hay que hacerlo cada vez que abras una terminal nueva:
 
 ```bash
-conda activate geocrop_analysis_mx
+source .venv/bin/activate    # Windows: .venv\Scripts\activate
 ```
 
 ## 5. Validar el entorno
@@ -95,20 +87,22 @@ Salida esperada:
 
 ```
 --- Running Environment Validation Check ---
-[SUCCESS] GDAL library found and is importable.
 [SUCCESS] GeoPandas library found and is importable.
 [SUCCESS] Rasterio library found and is importable.
-[SUCCESS] Earth Engine API library found and is importable.
-[SUCCESS] PyShepSeg library found and is importable.
+[SUCCESS] PySTAC Client library found and is importable.
+[SUCCESS] Planetary Computer library found and is importable.
+[SUCCESS] ODC-STAC library found and is importable.
+[SUCCESS] Rioxarray library found and is importable.
+[SUCCESS] Shepherd-WASM library found and is importable.
 [SUCCESS] ExactExtract library found and is importable.
-[SUCCESS] Scikit-Image library found and is importable.
+[SUCCESS] TPOT library found and is importable.
 [SUCCESS] Scikit-Learn library found and is importable.
 
 --- Validation Summary ---
 All critical libraries are installed correctly. Your environment is ready!
 ```
 
-Si alguna librería falla, borra el entorno (`conda env remove -n geocrop_analysis_mx`) y vuelve a ejecutar `mamba env create -f environment.yml`.
+Si alguna librería falla, borra `.venv` y repite el paso 3.
 
 ---
 
@@ -139,7 +133,7 @@ Después, `../outputs/aoi_yaqui_test/` contendrá `segmentation/`, `multispectra
 
 ### Fase 2 — `segment`
 
-Aplica segmentación de Shepherd al composite multitemporal (con `pyshepseg`). Toma ≈10 segundos.
+Aplica segmentación de Shepherd al composite multitemporal (con `shepherd-wasm`). Toma ≈10 segundos.
 
 ```bash
 python src/main.py --config config.test.yaml --phase segment
@@ -148,9 +142,9 @@ python src/main.py --config config.test.yaml --phase segment
 Salida esperada:
 
 ```
---- Starting Image Segmentation (using pyshepseg) ---
+--- Starting Image Segmentation (using shepherd-wasm) ---
 - Reading composite image: GM_Seg_Composite_Test.tif
-- Running Shepherd segmentation with pyshepseg...
+- Running Shepherd segmentation with shepherd-wasm...
 - Converting segmentation array from uint32 to int32 for polygonizing.
 - Saving segmentation raster to: segmented_clumps_test.tif
 - Polygonizing raster to vector: segmented_polygons_test.shp
@@ -302,19 +296,19 @@ python src/main.py --config config.test.yaml --phase setup_test
 python src/main.py --config config.test.yaml --phase full_run
 ```
 
-`full_run` encadena `download → segment → label → extract → train → predict`. Con `setup_test` ya hecho y los mosaicos offline presentes, la fase `download` se salta la descarga de GEE automáticamente.
+`full_run` encadena `download → segment → label → extract → train → predict`. Con `setup_test` ya hecho y los mosaicos offline presentes, la fase `download` se salta la descarga de imágenes automáticamente.
 
 ---
 
 ## 9. Siguientes pasos
 
 - **Predecir un año nuevo** con el mismo modelo: revisa la sección *Prediction for a New Year* en el [README.md](README.md). Los mosaicos preprocesados de 2019 para el AOI del Yaqui están en `test_data/preprocessed_mosaics/prediction_2019/`.
-- **Usar tu propio AOI**: crea `config.mi_region.yaml` siguiendo la estructura de `config.yaml`, coloca tus GeoPackages de AOI y etiquetas en `../data/<nombre_aoi>/`, autentícate con Google Earth Engine (`earthengine authenticate`) y corre `python src/main.py --config config.mi_region.yaml --phase full_run`.
+- **Usar tu propio AOI**: crea `config.mi_region.yaml` siguiendo la estructura de `config.yaml`, coloca tus GeoPackages de AOI y etiquetas en `../data/<nombre_aoi>/`, opcionalmente exporta un `EARTHDATA_TOKEN` gratuito (ver NEW_AOI.es.md §5) para el archivo HLS completo y corre `python src/main.py --config config.mi_region.yaml --phase full_run`.
 
 ---
 
 ## Solución de problemas
 
-- **`TypeError: TransformerMixin.__sklearn_tags__() missing 1 required positional argument: 'self'`** durante `train` → tu scikit-learn es ≥1.6. El pin del `environment.yml` lo previene; si aun así ocurre, ejecuta `mamba install -n geocrop_analysis_mx -c conda-forge "scikit-learn=1.5.*"`.
+- **`TypeError: TransformerMixin.__sklearn_tags__() missing 1 required positional argument: 'self'`** durante `train` → tu scikit-learn es ≥1.6. El pin de `requirements.txt` lo previene; si aun así ocurre, ejecuta `pip install "scikit-learn<1.6"`.
 - **`gdal_merge.py` no encontrado** durante `download` (Windows) → asegúrate de que el entorno está activado; `gdal_merge.py` vive en `<env>/Scripts/` en Windows y se invoca automáticamente.
 - **Una fase se salta silenciosamente** → revisa `outputs/aoi_yaqui_test/`; cada fase se salta a sí misma si su archivo de salida ya existe. Borra ese archivo para forzar la re-ejecución.

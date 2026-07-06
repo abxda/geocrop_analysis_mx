@@ -1,6 +1,6 @@
 import os
+import sys
 import glob
-import subprocess
 import geopandas as gpd
 import argparse
 import time
@@ -8,13 +8,11 @@ from datetime import datetime
 import pandas as pd
 import shutil
 import json
-import sys
 from dateutil.relativedelta import relativedelta
 
 from config import load_config
-from processing import segmentation, labeling, feature_extraction, modeling, mapping, compression
-# Google Earth Engine modules (ee, data_download.*) are imported lazily inside
-# the download phase, so offline runs work without earthengine-api installed.
+from data_download import stac_utils, stac_multispectral, stac_radar
+from processing import segmentation, labeling, feature_extraction, modeling, mapping, compression, extra_layers
 
 def _log(message):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}")
@@ -22,34 +20,6 @@ def _log(message):
 def _generate_monthly_ranges(start_date, end_date):
     months = pd.date_range(start=start_date, end=end_date, freq='MS')
     return [(s.strftime('%Y-%m-%d'), (s + pd.offsets.MonthEnd(1)).strftime('%Y-%m-%d')) for s in months]
-
-def run_gdal_merge(tile_paths, output_image_path):
-    if not tile_paths or not isinstance(tile_paths, list):
-        _log(f"- No new tiles to merge for {os.path.basename(output_image_path)}.")
-        return
-    tile_dir = os.path.dirname(tile_paths[0])
-    _log(f"- Merging {len(tile_paths)} tiles from {os.path.basename(tile_dir)} into {os.path.basename(output_image_path)}")
-
-    if sys.platform == "win32":
-        gdal_merge_script = os.path.join(os.path.dirname(sys.executable), 'Scripts', 'gdal_merge.py')
-    else:
-        gdal_merge_script = os.path.join(os.path.dirname(sys.executable), 'gdal_merge.py')
-
-    if not os.path.exists(gdal_merge_script):
-        gdal_merge_script = shutil.which("gdal_merge.py")
-        if not gdal_merge_script:
-            _log(f"- GDAL Merge FAILED. Could not find 'gdal_merge.py'. Please ensure it is in your PATH.")
-            return
-
-    command = [sys.executable, gdal_merge_script, '-o', output_image_path, '-of', 'GTiff', '-co', 'COMPRESS=LZW'] + tile_paths
-    try:
-        subprocess.run(command, check=True, capture_output=True, text=True)
-        _log("- Merge successful.")
-        shutil.rmtree(tile_dir)
-    except subprocess.CalledProcessError as e:
-        error_message = e.stderr if e.stderr else str(e)
-        _log(f"- GDAL Merge FAILED. Error: {error_message.strip()}")
-        _log(f"- Temporary tiles kept for inspection in: {tile_dir}")
 
 def show_config(config_path, config_data):
     _log(f"--- Displaying settings from: {config_path} ---")
@@ -97,23 +67,29 @@ def run_cleanup_phase(output_dir):
         shutil.rmtree(tile_dir)
     _log("- Cleanup complete.")
 
-def _download_outputs_present(config, output_dir):
-    """True when the main composite and every monthly mosaic already exist,
-    so the download phase (and any GEE connection) can be skipped entirely."""
-    main_composite = os.path.join(output_dir, 'segmentation', config['output_names']['segmentation_image'])
-    if not os.path.exists(main_composite):
-        return False
-    monthly_ranges = _generate_monthly_ranges(config['study_period']['start_date'], config['study_period']['end_date'])
-    for start, _ in monthly_ranges:
-        month_str = start[:7]
-        for kind in ('multispectral', 'radar'):
-            if not os.path.exists(os.path.join(output_dir, kind, month_str, f"{kind}_{month_str}.tif")):
-                return False
-    return True
-
 def run_download_phase(config, study_area, output_dir):
-    from data_download import multispectral, radar
     monthly_ranges = _generate_monthly_ranges(config['study_period']['start_date'], config['study_period']['end_date'])
+    backend = config.get('download_backend', 'stac')
+    if backend == 'gee':
+        # Optional: users with a Google Earth Engine account can offload the
+        # compositing to Google's servers. Everything else in the pipeline
+        # is identical; see data_download/gee_backend.py.
+        from data_download import gee_backend
+        gee_backend.run_download_phase(config, study_area, output_dir, monthly_ranges)
+        return
+    if backend != 'stac':
+        _log(f"ERROR: unknown download_backend '{backend}' in the config file. "
+             f"Valid values are \"stac\" (default, no account needed) or \"gee\" "
+             f"(optional, requires a Google Earth Engine account).")
+        sys.exit(1)
+    _run_download_phase_stac(config, study_area, output_dir, monthly_ranges)
+
+def _run_download_phase_stac(config, study_area, output_dir, monthly_ranges):
+    stac_utils.configure_gdal_env()
+    hls_provider, hls_catalog = stac_multispectral.resolve_provider(config.get('hls_provider', 'auto'))
+    _log(f"- HLS provider: {hls_provider}")
+    radar_catalog = stac_utils.get_catalog()
+    geobox = stac_utils.aoi_geobox(study_area, scale_meters=30)
     _log("--- Processing Main Segmentation Composite ---")
     if config['segmentation_composite_uses_full_study_period']:
         seg_start, seg_end = config['study_period']['start_date'], config['study_period']['end_date']
@@ -121,34 +97,17 @@ def run_download_phase(config, study_area, output_dir):
         seg_start, seg_end = config['segmentation_composite_custom_range']['start_date'], config['segmentation_composite_custom_range']['end_date']
     seg_output_dir = os.path.join(output_dir, 'segmentation')
     main_composite_path = os.path.join(seg_output_dir, config['output_names']['segmentation_image'])
-    hls_collection = multispectral.get_hls_collection(seg_start, seg_end, study_area)
-    if hls_collection.size().getInfo() > 0:
-        main_composite = multispectral.get_geometric_median(hls_collection)
-        tile_paths = multispectral.download_composite(main_composite, study_area, main_composite_path)
-        run_gdal_merge(tile_paths, main_composite_path)
-    else:
+    if not stac_multispectral.download_composite(hls_catalog, seg_start, seg_end, study_area, geobox, main_composite_path, hls_provider):
         _log(f"No images found for the main composite period. Skipping.")
     _log("--- Processing Monthly Composites ---")
-    for start, end in monthly_ranges:
+    for month_index, (start, end) in enumerate(monthly_ranges, start=1):
         month_str = start[:7]
-        _log(f"-- Processing month: {month_str} --")
-        optical_dir = os.path.join(output_dir, 'multispectral', month_str)
-        optical_path = os.path.join(optical_dir, f"multispectral_{month_str}.tif")
-        hls_monthly = multispectral.get_hls_collection(start, end, study_area)
-        if hls_monthly.size().getInfo() > 0:
-            optical_composite = multispectral.get_geometric_median(hls_monthly)
-            tile_paths_opt = multispectral.download_composite(optical_composite, study_area, optical_path)
-            run_gdal_merge(tile_paths_opt, optical_path)
-        else:
+        _log(f"-- Processing month {month_index} of {len(monthly_ranges)}: {month_str} --")
+        optical_path = os.path.join(output_dir, 'multispectral', month_str, f"multispectral_{month_str}.tif")
+        if not stac_multispectral.download_composite(hls_catalog, start, end, study_area, geobox, optical_path, hls_provider):
             _log(f"No optical images found for {month_str}. Skipping.")
-        radar_dir = os.path.join(output_dir, 'radar', month_str)
-        radar_path = os.path.join(radar_dir, f"radar_{month_str}.tif")
-        s1_monthly = radar.get_s1_collection(start, end, study_area)
-        if s1_monthly.size().getInfo() > 0:
-            radar_composite = s1_monthly.median()
-            tile_paths_rad = multispectral.download_composite(radar_composite, study_area, radar_path)
-            run_gdal_merge(tile_paths_rad, radar_path)
-        else:
+        radar_path = os.path.join(output_dir, 'radar', month_str, f"radar_{month_str}.tif")
+        if not stac_radar.download_composite(radar_catalog, start, end, study_area, geobox, radar_path):
             _log(f"No radar images found for {month_str}. Skipping.")
 
 def main():
@@ -206,19 +165,12 @@ def main():
 
     # --- Core Pipeline Phases ---
     if args.phase == 'download' or run_all or run_all_predict:
-        if _download_outputs_present(config, output_dir):
-            _log("All composites already exist (offline mode). Skipping PHASE: Download — no GEE connection needed.")
-        else:
-            _log("Initializing Google Earth Engine for Download...")
-            import ee
-            from data_download import gee_utils
-            gee_utils.initialize_gee()
-            aoi_path = os.path.join(data_dir, config['aoi_file'])
-            study_area = ee.Geometry(gpd.read_file(aoi_path).geometry[0].__geo_interface__)
-            phase_start_time = time.time()
-            _log(f"Executing PHASE: Download (Output: {output_dir})")
-            run_download_phase(config, study_area, output_dir)
-            _log(f"PHASE 'Download' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
+        aoi_path = os.path.join(data_dir, config['aoi_file'])
+        study_area = gpd.read_file(aoi_path).to_crs("EPSG:4326").geometry[0].__geo_interface__
+        phase_start_time = time.time()
+        _log(f"Executing PHASE: Download (Output: {output_dir})")
+        run_download_phase(config, study_area, output_dir)
+        _log(f"PHASE 'Download' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
 
     if args.phase == 'segment' or run_all or run_all_predict:
         phase_start_time = time.time()
@@ -251,7 +203,14 @@ def main():
             month_only = month_str.split('-')[1] # MM
             image_list.append({'path': os.path.join(output_dir, 'multispectral', month_str, f"multispectral_{month_str}.tif"), 'prefix': f'ms_{month_only}_'})
             image_list.append({'path': os.path.join(output_dir, 'radar', month_str, f"radar_{month_str}.tif"), 'prefix': f'sar_{month_only}_'})
-        
+
+        # External rasters (DEM, slope, climate, ...) declared under
+        # extra_layers in the config join the same per-segment statistics.
+        if config.get('extra_layers'):
+            aoi_path = os.path.join(data_dir, config['aoi_file'])
+            aoi_geometry = gpd.read_file(aoi_path).to_crs('EPSG:4326').geometry[0].__geo_interface__
+            image_list.extend(extra_layers.prepare_extra_layers(config, output_dir, aoi_geometry))
+
         feature_extraction.extract_features(output_dir, config, image_list)
         _log(f"PHASE 'Extract Features' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
 

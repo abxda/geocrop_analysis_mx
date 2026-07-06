@@ -36,10 +36,10 @@ def extract_features(output_dir, config, image_list):
             continue
         
         print(f"- Extracting stats from {os.path.basename(image_path)}...")
-        # Open with rasterio so the pipeline does not require the osgeo/GDAL
-        # Python bindings (exactextract accepts rasterio datasets directly).
-        with rasterio.open(image_path) as rast:
-            results = exact_extract(rast, gdf_zones, stats_to_calc)
+        # Pass a rasterio dataset (not a path) so exactextract uses its
+        # rasterio backend and the GDAL Python bindings are not needed.
+        with rasterio.open(image_path) as raster:
+            results = exact_extract(raster, gdf_zones, stats_to_calc)
         df_stats = pd.DataFrame(results)
         df_stats = df_stats.add_prefix(image_info['prefix'])
         raw_df = raw_df.join(df_stats)

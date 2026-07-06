@@ -25,7 +25,7 @@ Just enough to follow the rest of the guide:
 
 | Term | What it is | Why it matters |
 |---|---|---|
-| **AOI** (Area of Interest) | A single polygon describing the region you want to classify. | Defines what GEE downloads and where the segmentation runs. |
+| **AOI** (Area of Interest) | A single polygon describing the region you want to classify. | Defines what gets downloaded and where the segmentation runs. |
 | **Labels (ground truth)** | A vector of **points**, each tagged with the class observed at that location (field GPS, photo-interpretation, known parcels). Polygons work too but points are the expected input. | Points seed the segments with classes; the segmentation does the work of "expanding" each point into the homogeneous polygon around it. |
 | **Segment** | A homogeneous polygon produced by the Shepherd algorithm. | The fundamental unit of classification — every segment gets one class. |
 | **Composite** | A single multiband image summarising the study period (geometric median of HLS scenes). | What segmentation runs on; smoother and less cloudy than any individual scene. |
@@ -39,10 +39,10 @@ Just enough to follow the rest of the guide:
 Before touching the pipeline, gather these:
 
 - **A working installation** of GeoCrop Analysis MX. If you haven't done this yet, finish [TUTORIAL.md](TUTORIAL.md) first — the test run will fail-fast if anything is broken.
-- **An AOI vector file** (GeoPackage `.gpkg` recommended; Shapefile also works). Single polygon. Any projected or geographic CRS — the pipeline reprojects on the fly, but if you have a choice, give it WGS84 (`EPSG:4326`) because that's what GEE uses.
+- **An AOI vector file** (GeoPackage `.gpkg` recommended; Shapefile also works). Single polygon. Any projected or geographic CRS — the pipeline reprojects on the fly, but if you have a choice, give it WGS84 (`EPSG:4326`) because that's the pipeline's output grid.
 - **A labels vector file** (GeoPackage strongly preferred). A **point** layer where each point is a ground-truth observation (GPS visit, drone photo, photo-interpretation pin, known parcel centroid) with a categorical attribute holding the class name (e.g. `crop_name = "wheat"`). The bundled Yaqui example uses 1645 points across 6 classes. *(Polygons are accepted too — the pipeline reads any geometry — but points are the canonical, lower-effort input.)*
 - **A clear study period** — the months you want to characterise. For an annual crop you typically want the full growing cycle plus a month before and after to capture bare-soil and senescence patterns.
-- **A Google Earth Engine account** approved on a Google Cloud project (only if you're downloading new imagery — see §5).
+- **Optional: a free NASA Earthdata token** for the complete HLS archive (only if you are downloading new imagery — see §5).
 - **Time and disk**: budget ~10–30 minutes of pipeline time per ~1000 km² of AOI, and ~1 GB of disk per year of mosaics.
 
 ---
@@ -51,7 +51,7 @@ Before touching the pipeline, gather these:
 
 The AOI is just a boundary, but a few choices here save you pain later:
 
-1. **Keep it tight.** Every extra km² is more GEE bandwidth, more disk, and more segmentation noise. Buffer your real area of interest by 1–2 km if you want context, not more.
+1. **Keep it tight.** Every extra km² is more bandwidth, more disk, and more segmentation noise. Buffer your real area of interest by 1–2 km if you want context, not more.
 2. **Single polygon, single feature.** If you have a multipart or several disjoint polygons, dissolve them first. The pipeline reads `gdf.geometry[0]` — only the first feature is used.
 3. **Validate geometry.** In QGIS: *Vector → Geometry Tools → Check Validity*. Fix any self-intersections or null geometries.
 4. **Save as GeoPackage**: `File → Save Features As → GeoPackage`. Pick a short, descriptive name with no spaces: `aoi_bajio_2023.gpkg`.
@@ -116,29 +116,24 @@ Use the same CRS as your AOI (ideally WGS84 / `EPSG:4326`). The pipeline reproje
 
 ---
 
-## 5. Set up Google Earth Engine (skip if you have offline mosaics)
+## 5. Set up data access (skip if you have offline mosaics)
 
-You only need this if you don't already have the satellite mosaics on disk. To download fresh imagery:
+Imagery is downloaded from open STAC/COG cloud catalogs — **no Google Earth Engine account and no mandatory sign-up**:
 
-1. **Sign up** at https://earthengine.google.com and wait for approval.
-2. **Create a Google Cloud project** at https://console.cloud.google.com (any project; just note its ID).
-3. **Authenticate locally**:
+- **Sentinel-1 RTC radar** comes from Microsoft Planetary Computer with anonymous access. Nothing to configure.
+- **HLS optical** (Harmonized Landsat Sentinel-2) comes, by default, from Planetary Computer too — but that mirror has archive gaps (little/no HLS Sentinel-2 before ~2020 in some regions). For the complete, authoritative NASA archive:
 
-   ```bash
-   conda activate geocrop_analysis_mx
-   earthengine authenticate
-   ```
+  1. **Create a free account** at https://urs.earthdata.nasa.gov (instant, no approval wait).
+  2. **Generate a token**: Profile → *Generate Token*.
+  3. **Export it** before running the pipeline:
 
-   A browser window opens; copy the auth code back into the terminal.
+     ```bash
+     export EARTHDATA_TOKEN=your_token    # Windows: set EARTHDATA_TOKEN=your_token
+     ```
 
-4. **Set application-default credentials and the project**:
+  With the token set (or `hls_provider: "nasa"` in your config), HLS is streamed from NASA LPCLOUD; without it the pipeline falls back to Planetary Computer and warns about the gaps.
 
-   ```bash
-   gcloud auth application-default login
-   gcloud config set project YOUR_GCP_PROJECT_ID
-   ```
-
-5. **Check quotas**: `getDownloadURL` is rate-limited. The pipeline auto-tiles your AOI into pieces ≤ 0.05° to stay under per-request limits, but very large AOIs (>10,000 km²) may need an attended run.
+Downloads are windowed COG reads (HTTP range requests): only the bytes intersecting your AOI are transferred, and composites are written directly as single GeoTIFFs — no tiling/merging step and no export quotas.
 
 ---
 

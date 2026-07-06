@@ -2,12 +2,14 @@ import rasterio
 import rasterio.features
 import geopandas as gpd
 import numpy as np
-from pyshepseg import shepseg
+# shepherd-wasm is a pure NumPy/SciPy port of pyshepseg (bit-exact, numba-free)
+# that installs from plain pip and also runs in Pyodide/WebAssembly.
+import shepherd_wasm as shepseg
 import os
 
 def run_segmentation(segmentation_params, composite_image_path, output_dir, output_names):
-    """Performs Shepherd segmentation using the pyshepseg library and polygonizes the result."""
-    print("\n--- Starting Image Segmentation (using pyshepseg) ---")
+    """Performs Shepherd segmentation using the shepherd-wasm library and polygonizes the result."""
+    print("\n--- Starting Image Segmentation (using shepherd-wasm) ---")
     
     os.makedirs(output_dir, exist_ok=True)
     # Ensure output is a TIF file, as KEA is specific to rsgislib
@@ -28,9 +30,8 @@ def run_segmentation(segmentation_params, composite_image_path, output_dir, outp
         # Assuming the null value is something identifiable, e.g., the raster's nodata value.
         img_null_val = src.nodata
 
-    print(f"- Running Shepherd segmentation with pyshepseg...")
-    # Note: pyshepseg parameters might differ slightly from rsgislib's version.
-    # We are mapping them as closely as possible.
+    print(f"- Running Shepherd segmentation with shepherd-wasm...")
+    # Same signature and semantics as pyshepseg.shepseg.doShepherdSegmentation.
     seg_result = shepseg.doShepherdSegmentation(
         img_array,
         numClusters=segmentation_params.get('num_clusters', 80),

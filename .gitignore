@@ -1,21 +1,7 @@
-# Python artifacts
 __pycache__/
 *.pyc
-*.pyo
-
-# Local data and results (live as siblings of the repo, but just in case)
-data/
-outputs/
-
-# Environments
 .venv/
-venv/
 
-# Editor/OS noise
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-
-# Exception for test data
-!test_data/
+# Secrets — never commit tokens
+env
+.env
