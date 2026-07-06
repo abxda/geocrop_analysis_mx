@@ -1,12 +1,9 @@
 import geopandas as gpd
 import pandas as pd
 import os
+import rasterio
 from exactextract import exact_extract
-from osgeo import gdal
 import ast
-
-# Enable GDAL exceptions for cleaner error handling
-gdal.UseExceptions()
 
 def extract_features(output_dir, config, image_list):
     """Extracts statistics for ALL segments and saves them to a clean, structured CSV file."""
@@ -39,7 +36,10 @@ def extract_features(output_dir, config, image_list):
             continue
         
         print(f"- Extracting stats from {os.path.basename(image_path)}...")
-        results = exact_extract(image_path, gdf_zones, stats_to_calc)
+        # Open with rasterio so the pipeline does not require the osgeo/GDAL
+        # Python bindings (exactextract accepts rasterio datasets directly).
+        with rasterio.open(image_path) as rast:
+            results = exact_extract(rast, gdf_zones, stats_to_calc)
         df_stats = pd.DataFrame(results)
         df_stats = df_stats.add_prefix(image_info['prefix'])
         raw_df = raw_df.join(df_stats)

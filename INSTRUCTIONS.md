@@ -94,16 +94,8 @@ Si quieres generar o actualizar los archivos comprimidos a partir de una ejecuci
 python src/main.py --config config.yaml --phase compress_mosaics
 ```
 
-### 4.2. Organizar los Archivos de Prueba
-El repositorio incluye un script para organizar los mosaicos comprimidos en la estructura que la fase de `setup_test` espera.
-```bash
-# 1. Dar permisos de ejecución (solo la primera vez)
-chmod +x organize_mosaics.sh
-
-# 2. Ejecutar el script
-./organize_mosaics.sh
-```
-Esto poblará la carpeta `test_data/preprocessed_mosaics/`.
+### 4.2. Archivos de Prueba Incluidos
+El repositorio ya incluye la carpeta `test_data/preprocessed_mosaics/` con todos los mosaicos comprimidos del caso Yaqui (8 meses ópticos + 8 de radar + composite de segmentación, más el set `prediction_2019`). No necesitas generar ni organizar nada: la fase `setup_test` del paso siguiente los copia automáticamente a la carpeta `outputs`. Si generaste tus propios mosaicos con `compress_mosaics`, colócalos siguiendo esa misma estructura (`multispectral/AAAA-MM/multispectral_AAAA-MM.tif`, `radar/AAAA-MM/radar_AAAA-MM.tif`, `segmentation/<imagen>.tif`).
 
 ### 4.3. Ejecutar el Pipeline en Modo Offline
 Ahora, al ejecutar la fase `setup_test`, el pipeline se volverá "offline".

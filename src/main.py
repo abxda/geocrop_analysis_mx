@@ -2,7 +2,6 @@ import os
 import glob
 import subprocess
 import geopandas as gpd
-import ee
 import argparse
 import time
 from datetime import datetime
@@ -13,8 +12,9 @@ import sys
 from dateutil.relativedelta import relativedelta
 
 from config import load_config
-from data_download import gee_utils, multispectral, radar
 from processing import segmentation, labeling, feature_extraction, modeling, mapping, compression
+# Google Earth Engine modules (ee, data_download.*) are imported lazily inside
+# the download phase, so offline runs work without earthengine-api installed.
 
 def _log(message):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}")
@@ -97,7 +97,22 @@ def run_cleanup_phase(output_dir):
         shutil.rmtree(tile_dir)
     _log("- Cleanup complete.")
 
+def _download_outputs_present(config, output_dir):
+    """True when the main composite and every monthly mosaic already exist,
+    so the download phase (and any GEE connection) can be skipped entirely."""
+    main_composite = os.path.join(output_dir, 'segmentation', config['output_names']['segmentation_image'])
+    if not os.path.exists(main_composite):
+        return False
+    monthly_ranges = _generate_monthly_ranges(config['study_period']['start_date'], config['study_period']['end_date'])
+    for start, _ in monthly_ranges:
+        month_str = start[:7]
+        for kind in ('multispectral', 'radar'):
+            if not os.path.exists(os.path.join(output_dir, kind, month_str, f"{kind}_{month_str}.tif")):
+                return False
+    return True
+
 def run_download_phase(config, study_area, output_dir):
+    from data_download import multispectral, radar
     monthly_ranges = _generate_monthly_ranges(config['study_period']['start_date'], config['study_period']['end_date'])
     _log("--- Processing Main Segmentation Composite ---")
     if config['segmentation_composite_uses_full_study_period']:
@@ -191,14 +206,19 @@ def main():
 
     # --- Core Pipeline Phases ---
     if args.phase == 'download' or run_all or run_all_predict:
-        _log("Initializing Google Earth Engine for Download...")
-        gee_utils.initialize_gee()
-        aoi_path = os.path.join(data_dir, config['aoi_file'])
-        study_area = ee.Geometry(gpd.read_file(aoi_path).geometry[0].__geo_interface__)
-        phase_start_time = time.time()
-        _log(f"Executing PHASE: Download (Output: {output_dir})")
-        run_download_phase(config, study_area, output_dir)
-        _log(f"PHASE 'Download' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
+        if _download_outputs_present(config, output_dir):
+            _log("All composites already exist (offline mode). Skipping PHASE: Download — no GEE connection needed.")
+        else:
+            _log("Initializing Google Earth Engine for Download...")
+            import ee
+            from data_download import gee_utils
+            gee_utils.initialize_gee()
+            aoi_path = os.path.join(data_dir, config['aoi_file'])
+            study_area = ee.Geometry(gpd.read_file(aoi_path).geometry[0].__geo_interface__)
+            phase_start_time = time.time()
+            _log(f"Executing PHASE: Download (Output: {output_dir})")
+            run_download_phase(config, study_area, output_dir)
+            _log(f"PHASE 'Download' complete. Duration: {time.time() - phase_start_time:.2f} seconds.")
 
     if args.phase == 'segment' or run_all or run_all_predict:
         phase_start_time = time.time()
